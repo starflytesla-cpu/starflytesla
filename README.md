@@ -2,7 +2,9 @@
 
 給線下工廠 / 實體門店用的「隨手拍 → 自動整理 → AI 混剪 → 多平台發佈 → 評論管理」一站式 WebApp。
 
-> 狀態：**規劃階段**。目前只有專案骨架、調研與架構文件，尚未開始寫業務程式碼。
+> 狀態：**執行方案 v1 已確定**（見 [docs/04-roadmap.md](docs/04-roadmap.md)），下一步是 Phase 0 基礎建設。
+>
+> 方向：海外社媒（TikTok / IG / YouTube / FB）· 先自營一個帳號群 · 成片人工審核後發佈 · AI 使用 DeepSeek、豆包、kie.ai、OpenRouter。
 
 ## 核心流程
 
@@ -23,7 +25,7 @@
 | [docs/01-research.md](docs/01-research.md) | GitHub 與網路調研：可參考 / 可複用的開源專案與 API |
 | [docs/02-architecture.md](docs/02-architecture.md) | 系統架構、技術選型、模組拆分、資料模型草稿 |
 | [docs/03-vps-sizing.md](docs/03-vps-sizing.md) | VPS 配置建議（入門 / 推薦 / 上限）與容量估算 |
-| [docs/04-roadmap.md](docs/04-roadmap.md) | 執行方案草稿：分階段里程碑與待確認問題 |
+| [docs/04-roadmap.md](docs/04-roadmap.md) | 執行方案 v1：已確定的決策、AI 分工、分階段計畫、成本估算、風險 |
 
 ## 目錄結構（規劃）
 

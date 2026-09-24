@@ -38,8 +38,8 @@ Caddy 做反向代理並自動申請 HTTPS 憑證，全部服務用 Docker Compo
 | 資料庫 | PostgreSQL 16 + pgvector | 業務資料和向量檢索放同一個庫，維運簡單 |
 | 物件儲存 | MinIO（自架）或 Cloudflare R2 / 阿里雲 OSS | 素材量成長快，建議之後遷到雲端物件儲存 |
 | 影片處理 | FFmpeg、PySceneDetect、faster-whisper | 成熟、可控、無授權費 |
-| AI | LLM（文案）、多模態模型（看圖打標籤）、嵌入模型（檢索） | 用 provider 抽象層，可以切換不同廠商 |
-| TTS | Edge-TTS（免費）/ 阿里雲 / 火山引擎 / CosyVoice（可自架） | 音色管理模組對應這一層 |
+| AI | 文案：DeepSeek；看圖打標籤：豆包 Seed Vision（BytePlus ModelArk）；備援：OpenRouter | 都是 OpenAI 相容介面，統一由 `ai_provider` 模組管理，可以切換廠商 |
+| TTS | kie.ai（ElevenLabs 多語系）；Edge-TTS（免費 fallback） | 海外受眾，配音品質優先；音色管理模組對應這一層 |
 | 部署 | Docker Compose + Caddy | 單台 VPS 即可運作 |
 
 ## 3. 核心模組
@@ -84,25 +84,38 @@ class PublisherAdapter(Protocol):
     def reply_comment(self, account, comment_id, text) -> None: ...
 ```
 
-實作計畫：`UploadPostAdapter`（海外）、`DouyinOpenAdapter`（抖音官方）、`PlaywrightAdapter`（過渡用、有風險）。
+第一個實作是 `UploadPostAdapter`（TikTok、IG、YouTube、FB）。之後視成本改接各平台官方 API，只需要新增 adapter。
 
-評論管理：定時拉取評論 → LLM 分類（詢價 / 好評 / 投訴 / 垃圾）→ 產生建議回覆 → 人工確認或自動回覆。
+評論管理：定時拉取評論 → LLM 分類（詢價 / 好評 / 投訴 / 垃圾）→ 產生建議回覆 → **人工確認後才送出**（初期不做自動回覆）。
+
+### 3.5 人工審核流程
+
+```
+渲染完成 → pending_review ──通過──► approved → 排程 → published
+                     └─退回（原因）─► rejected → 換素材 / 改文案 → 重新渲染
+```
+
+### 3.6 成本記錄（為積分制準備）
+
+每一次 AI 呼叫、TTS、渲染、發佈都寫入 `usage_ledger`，記錄動作類型、用量、實際成本和所屬租戶與任務。試營運期只記錄不扣費；商品化時依實際成本訂定積分價格，加上 `credit_balance` 與儲值即可。
 
 ## 4. 資料模型（草稿）
 
 ```
 tenant(id, name)                                  # 一個工廠 / 門店 = 一個租戶
 user(id, tenant_id, role)
-brand_profile(id, tenant_id, name, industry, audience, selling_points, details, tone)
+brand_profile(id, tenant_id, name, industry, audience, selling_points, details, tone, target_language)
 asset(id, tenant_id, storage_key, duration, width, height, status, uploaded_by)
 clip(id, asset_id, start, end, scene, tags[], description, quality, transcript, embedding vector)
 template(id, tenant_id?, strategy, name)          # tenant_id 為空 = 系統內建行業模板
 template_shot(id, template_id, order, brief, expected_scene, target_seconds)
 job(id, tenant_id, template_id, profile_id, variants, status)
-video(id, job_id, timeline_json, storage_key, status)
-social_account(id, tenant_id, platform, credentials_ref, status)
+video(id, job_id, timeline_json, storage_key, status, reviewed_by, review_note)   # status 含 pending_review / approved / rejected
+account_group(id, tenant_id, profile_id, name)   # 帳號群：一份人設 + 多個社媒帳號
+social_account(id, tenant_id, account_group_id, platform, provider_profile, credentials_ref, status)
 post(id, video_id, social_account_id, caption, schedule_at, status, remote_id, url)
-comment(id, post_id, remote_id, author, text, intent, reply_text, replied_at)
+comment(id, post_id, remote_id, author, text, intent, suggested_reply, reply_text, replied_by, replied_at)
+usage_ledger(id, tenant_id, job_id?, action, provider, model, units, unit, cost_usd, created_at)
 ```
 
 ## 5. 安全與合規重點
@@ -110,4 +123,5 @@ comment(id, post_id, remote_id, author, text, intent, reply_text, replied_at)
 - 社媒 token / cookie 加密儲存（`credentials_ref` 指向加密後的 secret），不寫入日誌。
 - 多租戶隔離：所有查詢都要帶 `tenant_id`；物件儲存路徑加上租戶前綴。
 - 上傳限制檔案類型與大小；對上傳檔案用 ffprobe 驗證，不信任前端提供的 MIME。
-- 若目標是中國大陸平台並使用大陸機房，網站需要 ICP 備案；AI 生成內容需依規定標示。
+- AI 配音等生成內容，發佈時依各平台規定標示。
+- 目標平台為海外，VPS 放在海外機房，不需要 ICP 備案。

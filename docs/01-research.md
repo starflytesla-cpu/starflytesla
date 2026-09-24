@@ -64,4 +64,4 @@
 3. **發佈層做成 adapter 介面**：
    - 國際平台：先接 Upload-Post（最快上線，順帶取得評論管理），之後視成本改為自架或官方 API。
    - 國內平台：官方開放平台優先（抖音企業號）；Playwright 方案只作為過渡，並標示風險。
-4. **先確定目標平台**：國內還是海外，會影響 VPS 機房位置、ICP 備案、要接哪些 API，是最優先要回答的問題。
+4. **已決定目標平台為海外**：發佈先接 Upload-Post（Professional 方案含 TikTok，25 個 profile，約 US$50/月，見 [價格比較](https://www.upload-post.com/pricing-comparison/)），透過它發佈可以省去自己申請 TikTok API 審核。
