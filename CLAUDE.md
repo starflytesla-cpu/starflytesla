@@ -54,7 +54,8 @@
 - **2026-09-30 登入卡住**：正式伺服器部署完成，`http://50.114.172.174` 的登入頁可以開啟，但按「登入」後一直轉圈。登入頁能出現，推測 `GET /api/auth/me` 有回應，`POST /api/auth/login` 則沒有回應（尚未證實）。排查順序：
   1. `docker compose -f infra/docker-compose.yml ps` 以及 `logs --tail 100 api web`
   2. 在伺服器上用 curl 打 `http://localhost/api/auth/login`（密碼在 `.env` 的 `ADMIN_PASSWORD`），確認後端本身是否正常
-  3. 若伺服器本機正常，問題就在使用者網路到伺服器之間。使用者可能在中國大陸，明文 HTTP 可能被干擾，應優先設定網域 + HTTPS。
+  3. 使用者人在美國，可以排除跨境網路干擾；問題應該在伺服器端（容器狀態、API 是否卡住、Caddy 轉發、資料庫連線）。若伺服器本機 curl 也卡住，查 api 容器記錄與 `docker compose exec api python -c ...` 逐步縮小範圍。
+  4. 還沒有網域時，可以先用免費的 `50-114-172-174.sslip.io`（自動解析到伺服器 IP）當 `SITE_ADDRESS`，Caddy 會自動申請 Let's Encrypt 憑證，網站就有 HTTPS。修改前先跟使用者確認。
 
 ### 在伺服器上操作時的規則
 
