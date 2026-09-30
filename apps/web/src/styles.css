@@ -1,0 +1,235 @@
+:root {
+  --page-bg: linear-gradient(135deg, #eef3ff 0%, #f6f0ff 100%);
+  --brand-gradient: linear-gradient(135deg, #2f6bff 0%, #7c5cff 100%);
+  --muted: #8a93a6;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #f4f7ff;
+}
+
+.center-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.section {
+  margin-bottom: 16px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.small {
+  font-size: 12px;
+}
+
+/* ---------- 版面 ---------- */
+.app-shell {
+  min-height: 100vh;
+  background: var(--page-bg);
+}
+
+.app-sider {
+  border-right: 1px solid rgba(47, 107, 255, 0.08);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 18px 12px;
+}
+
+.brand-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--brand-gradient);
+  color: #fff;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.brand-logo.large {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+  border-radius: 14px;
+  margin: 0 auto 12px;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.side-menu {
+  border-inline-end: none !important;
+  background: transparent;
+}
+
+.menu-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.phase-tag {
+  margin-inline-end: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  padding: 0 16px;
+  height: 56px;
+  line-height: 56px;
+}
+
+.user-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-content {
+  padding: 0 24px 32px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 991px) {
+  .app-content {
+    padding: 0 16px 24px;
+  }
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 20px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.page-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+/* ---------- 登入 ---------- */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--page-bg);
+  padding: 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 20px 60px rgba(47, 107, 255, 0.12);
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-brand h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.login-brand p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.login-alert {
+  margin-bottom: 16px;
+}
+
+/* ---------- 元件細節 ---------- */
+.capability-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.capability-row:last-child {
+  border-bottom: none;
+}
+
+.ok-icon {
+  color: #22c55e;
+}
+
+.muted-icon {
+  color: var(--muted);
+}
+
+.star-on {
+  color: #f5a623;
+  font-size: 16px;
+}
+
+.add-model {
+  margin-top: 12px;
+}
+
+.provider-radio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.provider-radio .ant-radio-button-wrapper {
+  border-radius: 8px !important;
+  border-inline-start-width: 1px;
+}
+
+.provider-radio .ant-radio-button-wrapper::before {
+  display: none !important;
+}

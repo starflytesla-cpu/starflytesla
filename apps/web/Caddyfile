@@ -1,0 +1,41 @@
+# SITE_ADDRESS 預設 :80（用 IP 以 http 開啟）；設成網域（例如 app.example.com）後，
+# Caddy 會自動申請並續期 HTTPS 憑證，並把 http 轉址到 https。
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# 預留給 Phase 1 的影片上傳
+	request_body {
+		max_size 2GB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Vite 產出的檔名含內容雜湊，可以長期快取
+	handle /assets/* {
+		root * /srv
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# 其他路徑都回傳 index.html（前端路由），且不快取，確保部署後立即拿到新版本
+	handle {
+		root * /srv
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# 容器健康檢查專用，不對外開放
+:8081 {
+	respond /healthz "ok" 200
+}
