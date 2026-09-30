@@ -47,7 +47,7 @@ bash infra/bench/vps-bench.sh
 6. 防火牆只開放 SSH、80、443；啟用 fail2ban 和自動安全更新
 7. 只有在指定 `DISABLE_SSH_PASSWORD=yes` 時，才會關閉 SSH 密碼登入（務必先確認金鑰登入可用）
 
-## 之後每次更新
+## 部署與更新
 
 Claude 推送新版本後，登入伺服器執行：
 
@@ -55,10 +55,35 @@ Claude 推送新版本後，登入伺服器執行：
 cd starflytesla && bash infra/scripts/deploy.sh
 ```
 
-腳本會拉取最新程式碼、重建並啟動所有服務，並等待健康檢查通過。第一次執行時會自動建立 `.env` 並產生隨機密碼。有錯誤時，把畫面截圖給 Claude。
+腳本會拉取最新程式碼、建置並啟動所有服務，並等待健康檢查通過。
 
-## 網域（Phase 0 部署前準備好即可）
+**第一次部署**（約 3～5 分鐘）時，腳本會：
+
+1. 從 `.env.example` 建立 `.env`，自動產生資料庫密碼、`SECRET_KEY` 與管理員密碼。
+2. 最後印出網址與**管理員帳號密碼**（只顯示這一次；忘記的話可以執行 `grep ADMIN_ .env` 查看）。
+
+接著：
+
+1. 用瀏覽器打開印出的網址（例如 `http://50.114.172.174`），用管理員帳密登入。
+2. 右上角 →「修改密碼」，換成自己的密碼。
+3. 左側「系統設定 → 模型渠道」→「新增渠道」，選 DeepSeek 並貼上 API Key，按模型旁的「測試」。
+4. 再新增「豆包（BytePlus ModelArk）」渠道並測試。
+5. 到「用量與成本」確認有看到兩筆成本記錄。
+
+有錯誤時，把畫面截圖給 Claude。查看後端日誌：
+
+```bash
+docker compose -f infra/docker-compose.yml logs --tail 100 api
+```
+
+## 網域與 HTTPS
 
 1. 買一個網域（例如在 Cloudflare、Namecheap 購買）。
-2. 新增一筆 DNS **A 記錄**，例如 `app.你的網域.com` 指向 `50.114.172.174`。
-3. 部署時，Caddy 會自動申請並續期 HTTPS 憑證。
+2. 新增一筆 DNS **A 記錄**，例如 `app.你的網域.com` 指向 `50.114.172.174`。若使用 Cloudflare，先把代理（橘色雲朵）關掉，讓 Caddy 能直接申請憑證。
+3. 在伺服器的專案目錄編輯 `.env`，把 `SITE_ADDRESS=:80` 改成 `SITE_ADDRESS=app.你的網域.com`：
+
+   ```bash
+   nano .env
+   ```
+
+4. 重新部署：`bash infra/scripts/deploy.sh`。Caddy 會自動申請並續期 HTTPS 憑證，之後改用 `https://app.你的網域.com` 開啟。

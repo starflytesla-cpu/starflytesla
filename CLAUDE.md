@@ -13,7 +13,7 @@
 - 商業模式：先自營服務自己的客戶，從**一個帳號群**開始；之後打包銷售或改積分制，所以每個 AI / 渲染 / 發佈動作都要記錄成本（`usage_ledger`）。
 - AI：文案用 DeepSeek，看圖打標籤用豆包 Seed Vision（BytePlus），配音用 kie.ai（ElevenLabs），備援用 OpenRouter。
 - 成片和 AI 評論回覆**都要人工確認**後才發出。
-- 技術棧：FastAPI + PostgreSQL（pgvector）+ Redis + MinIO + FFmpeg，前端為手機優先 PWA，用 Docker Compose 部署在單台 VPS。
+- 技術棧：FastAPI + PostgreSQL（pgvector）+ FFmpeg；前端 React + Vite + Ant Design（手機優先 PWA）；Caddy 提供網頁與 HTTPS；Docker Compose 部署在單台 VPS。不使用 Redis 與 MinIO（見 docs/02-architecture.md 開頭）。
 
 ## 文件
 
@@ -22,6 +22,15 @@
 - `docs/03-vps-sizing.md`：VPS 規格
 - `docs/04-roadmap.md`：執行方案、階段、成本
 - `docs/05-server-setup.md`：伺服器初始化
+
+## 程式結構與慣例
+
+- `services/api/`：FastAPI。路由在 `app/routers/`，只處理輸入輸出；業務邏輯在 `app/services/`；資料表在 `app/models.py`，改資料表必須新增 Alembic 遷移（`alembic revision --autogenerate`）並用 `alembic check` 確認。
+- API 回應一律是 `{code, data, msg, reason}`：成功用 `schemas.ok()`；失敗丟 `app.errors` 的 `AppError`，HTTP status 要反映真實失敗，`msg` 是可直接顯示的繁體中文。
+- **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。
+- 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
+- `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
+- 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
 
 ## 正式伺服器
 
@@ -46,5 +55,7 @@
 
 - [x] 調研、架構、執行方案、VPS 選購
 - [x] 伺服器初始化與壓測（2026-09-30）：steal 0%，30 秒成片約 30 秒渲染；專案 clone 在伺服器的 `/root/starflytesla`
-- [ ] Phase 0：基礎建設（Compose 全套服務、FastAPI 骨架、登入、`ai_provider` + `usage_ledger`、前端 PWA 骨架、Caddy HTTPS）
+- [x] Phase 0 程式完成（2026-09-30）：登入 / 帳號、模型渠道、`ai_provider` + `usage_ledger`、後台網頁、Caddy、deploy.sh 自動產生密碼
+- [ ] Phase 0 部署到正式伺服器，並用真實 API Key 測試 DeepSeek 與豆包
+- [ ] Phase 1：素材中心
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP

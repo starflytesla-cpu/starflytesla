@@ -2,7 +2,7 @@
 
 給線下工廠 / 實體門店用的「隨手拍 → 自動整理 → AI 混剪 → 多平台發佈 → 評論管理」一站式 WebApp。
 
-> 狀態：**執行方案 v1 已確定**（見 [docs/04-roadmap.md](docs/04-roadmap.md)），下一步是 Phase 0 基礎建設。
+> 狀態：**Phase 0 程式完成**（登入、帳號、模型渠道、成本記錄、後台網頁、部署），下一步是 Phase 1 素材中心。見 [docs/04-roadmap.md](docs/04-roadmap.md)。
 >
 > 方向：海外社媒（TikTok / IG / YouTube / FB）· 先自營一個帳號群 · 成片人工審核後發佈 · AI 使用 DeepSeek、豆包、kie.ai、OpenRouter。
 
@@ -28,21 +28,32 @@
 | [docs/04-roadmap.md](docs/04-roadmap.md) | 執行方案 v1：已確定的決策、AI 分工、分階段計畫、成本估算、風險 |
 | [docs/05-server-setup.md](docs/05-server-setup.md) | 伺服器初始化與部署：一行指令初始化、壓測、部署更新 |
 
-## 目錄結構（規劃）
+## 目錄結構
 
 ```
-apps/web/          前端 WebApp（手機優先 PWA：拍攝上傳、素材庫、模板、任務、發佈）
-services/api/      後端 API（FastAPI）：帳號、素材、模板、任務、發佈、評論
-services/worker/   背景任務：素材分析、文案生成、TTS、渲染、發佈
-infra/             Docker Compose、反向代理、部署腳本
+apps/web/          前端（React + Vite + Ant Design，手機優先 PWA），正式環境由 Caddy 提供
+services/api/      後端 API（FastAPI + SQLAlchemy + Alembic）
+infra/             docker-compose.yml、部署 / 初始化 / 壓測腳本
 docs/              規劃文件
 ```
 
-## 本機啟動基礎設施
+## 部署
 
-目前只有基礎服務（PostgreSQL + Redis + MinIO）可以啟動：
+在伺服器上：`bash infra/scripts/deploy.sh`，詳見 [docs/05-server-setup.md](docs/05-server-setup.md)。
+
+## 本機開發
+
+需要 Python 3.12、Node 22、PostgreSQL 16。
 
 ```bash
-cp .env.example .env
-docker compose -f infra/docker-compose.yml --env-file .env up -d
+# 後端（services/api）
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements-dev.txt
+export DATABASE_URL=postgresql+psycopg://starfly:starfly@localhost:5432/starfly SECRET_KEY=dev \
+       ADMIN_EMAIL=admin@starfly.local ADMIN_PASSWORD=dev-password
+alembic upgrade head && uvicorn app.main:app --reload --port 8000
+python -m pytest -q          # 測試使用 starfly_test 資料庫
+
+# 前端（apps/web），/api 會轉給 localhost:8000
+npm install && npm run dev
 ```

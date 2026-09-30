@@ -35,17 +35,22 @@
 
 開發方式：Claude 在雲端環境寫程式、測試並推送到 GitHub；每完成一個可部署的進度，使用者在伺服器執行 `bash infra/scripts/deploy.sh` 更新（見 05-server-setup.md）。
 
-### Phase 0：基礎建設（第 1 週）
+### Phase 0：基礎建設（第 1 週）✅ 程式完成，待部署到正式伺服器
 
 - [x] 專案骨架、調研、架構文件
 - [x] 購買 VPS、初始化（Docker、資料碟、防火牆）、壓測通過
-- [ ] Docker Compose：PostgreSQL + pgvector、Redis、MinIO、tusd、Caddy（HTTPS）
-- [ ] FastAPI 骨架、Alembic 遷移、登入（先做管理員帳號 + 拍攝員帳號兩種角色）
-- [ ] `ai_provider` 模組 + `usage_ledger` 成本記錄表
-- [ ] 前端骨架（PWA，手機優先）、CI（GitHub 自動跑 lint + test，不涉及部署）
-- [ ] 在 VPS 上用 deploy.sh 部署起來
+- [x] Docker Compose：PostgreSQL（pgvector）、API、Caddy（網頁 + 反向代理 + HTTPS）
+- [x] FastAPI 骨架、Alembic 遷移、登入（管理員 / 拍攝員兩種角色）、帳號管理
+- [x] 模型渠道（預設 DeepSeek / 豆包 / OpenRouter / kie.ai / 自訂），API Key 加密存放
+- [x] `ai_provider` 模組 + `usage_ledger` 成本記錄、用量與成本頁
+- [x] 前端 PWA（手機優先）：登入、儀表板、模型渠道、用量、帳號管理，後續功能預留頁
+- [x] CI（GitHub 自動跑測試與建置，不涉及部署）
+- [ ] 在正式伺服器執行 deploy.sh
+- [ ] 網域與 HTTPS（使用者提供網域後，改 `.env` 的 `SITE_ADDRESS` 再部署一次）
 
-**驗收**：用網域加 HTTPS 開得了後台，可以登入，並能從後台測試呼叫一次 DeepSeek 和豆包，看到成本記錄。
+調整：Redis、MinIO 不再使用；tusd 移到 Phase 1 與上傳功能一起做（見 02-architecture.md 開頭）。
+
+**驗收**：用網址開得了後台、可以登入，並能在「模型渠道」測試呼叫一次 DeepSeek 和豆包，在「用量與成本」看到成本記錄。
 
 ### Phase 1：拍攝上傳與素材庫（第 2～3 週）
 

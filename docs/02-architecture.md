@@ -1,4 +1,10 @@
-# 02 · 系統架構（草稿）
+# 02 · 系統架構
+
+> **Phase 0 實作後的調整（2026-09-30）**
+> - 前端改用 **React + Vite + Ant Design**（參考 [BeefTV](https://github.com/glanderness/BeefTV) 的技術棧），由 **Caddy** 直接提供網頁並把 `/api` 轉給後端；對外只開 80 / 443。
+> - **AI 渠道的 API Key 在後台網頁填寫**，加密後存進資料庫，不放在 `.env`。
+> - **不使用 Redis**：背景任務改用 PostgreSQL 任務表（`SELECT … FOR UPDATE SKIP LOCKED` 領取），少一個服務，任務也不會因重啟而遺失。Phase 1 實作。
+> - **不使用 MinIO**：社群版映像已從 Docker Hub 下架。素材先存在伺服器資料碟（`/data`），量大後再改接 Cloudflare R2 等 S3 相容服務。
 
 ## 1. 總覽
 
@@ -14,8 +20,8 @@
         │                      │ 投遞任務
         ▼                      ▼
  ┌─────────────┐        ┌─────────────┐      ┌──────────────────┐
- │ 物件儲存     │◄──────►│ Redis 佇列   │─────►│ Workers           │
- │ MinIO / S3  │        └─────────────┘      │ ├ analyze 素材分析 │
+ │ 檔案儲存     │◄──────►│ 任務表       │─────►│ Workers           │
+ │ 資料碟 / R2 │        │ (PostgreSQL)│      │ ├ analyze 素材分析 │
  └─────────────┘                             │ ├ script  文案生成 │
         ▲                                    │ ├ tts     配音     │
         │                                    │ ├ render  渲染     │
@@ -25,18 +31,18 @@
  └─────────────┘                          外部：LLM / 多模態 / TTS / 社媒 API
 ```
 
-Caddy 做反向代理並自動申請 HTTPS 憑證，全部服務用 Docker Compose 部署在單台 VPS；之後再按需求把 render worker 拆到獨立機器。
+Caddy 提供網頁、反向代理 `/api`，並在設定網域後自動申請 HTTPS 憑證；全部服務用 Docker Compose 部署在單台 VPS；之後再按需求把 render worker 拆到獨立機器。
 
 ## 2. 技術選型
 
 | 層 | 選擇 | 理由 |
 | --- | --- | --- |
-| 前端 | Next.js（或 Vue 3 + Vite）+ Tailwind，PWA | 手機優先；`<input capture>` 直接調用相機；可「加到主畫面」 |
-| 上傳 | Uppy + tusd | 斷點續傳，直接寫入 S3 相容儲存 |
+| 前端 | React 19 + Vite + Ant Design + TanStack Query，PWA | 手機優先；`<input capture>` 直接調用相機；可「加到主畫面」 |
+| 上傳 | Uppy + tusd | 斷點續傳，先寫入資料碟，之後可改寫 S3 相容儲存 |
 | API | Python FastAPI | 影片 / AI 生態都在 Python，和 worker 共用程式碼與模型 |
-| 任務佇列 | Celery 或 Dramatiq + Redis | 分佇列：`analyze` / `render` / `publish` 各自限制併發 |
+| 任務佇列 | PostgreSQL 任務表 + 租約（lease）領取 | 分類型：`analyze` / `render` / `publish` 各自限制併發；不需要 Redis |
 | 資料庫 | PostgreSQL 16 + pgvector | 業務資料和向量檢索放同一個庫，維運簡單 |
-| 物件儲存 | MinIO（自架）或 Cloudflare R2 / 阿里雲 OSS | 素材量成長快，建議之後遷到雲端物件儲存 |
+| 檔案儲存 | 資料碟（`/data`）→ 之後 Cloudflare R2 | MinIO 社群版映像已下架；單機規模直接存資料碟最簡單 |
 | 影片處理 | FFmpeg、PySceneDetect、faster-whisper | 成熟、可控、無授權費 |
 | AI | 文案：DeepSeek；看圖打標籤：豆包 Seed Vision（BytePlus ModelArk）；備援：OpenRouter | 都是 OpenAI 相容介面，統一由 `ai_provider` 模組管理，可以切換廠商 |
 | TTS | kie.ai（ElevenLabs 多語系）；Edge-TTS（免費 fallback） | 海外受眾，配音品質優先；音色管理模組對應這一層 |
