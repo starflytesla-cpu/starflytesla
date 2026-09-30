@@ -45,6 +45,6 @@
 ## 目前進度
 
 - [x] 調研、架構、執行方案、VPS 選購
-- [ ] 伺服器初始化（server-bootstrap.sh）與壓測
+- [x] 伺服器初始化與壓測（2026-09-30）：steal 0%，30 秒成片約 30 秒渲染；專案 clone 在伺服器的 `/root/starflytesla`
 - [ ] Phase 0：基礎建設（Compose 全套服務、FastAPI 骨架、登入、`ai_provider` + `usage_ledger`、前端 PWA 骨架、Caddy HTTPS）
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP

@@ -4,7 +4,7 @@
 
 | # | 問題 | 決定 | 對方案的影響 |
 | --- | --- | --- | --- |
-| 1 | 目標平台 | **海外社媒**（TikTok、Instagram Reels、YouTube Shorts、Facebook Reels） | VPS 放海外（建議新加坡）、不需 ICP 備案；發佈先接 Upload-Post |
+| 1 | 目標平台 | **海外社媒**（TikTok、Instagram Reels、YouTube Shorts、Facebook Reels） | VPS 放海外（已購洛杉磯直連中國線路）、不需 ICP 備案；發佈先接 Upload-Post |
 | 2 | 商業模式 | **先自營服務自己的客戶**，流程跑通後再整套打包銷售，或改成積分儲值 | MVP 單租戶即可，但資料表先留 `tenant_id`；**從第一天就記錄每個動作的成本**，之後積分定價有依據 |
 | 3 | AI 服務商 | **豆包、DeepSeek**；海外用 **kie.ai、OpenRouter** | 做統一的 AI provider 層（都是 OpenAI 相容介面），可以按任務切換廠商 |
 | 4 | 審核 | **初期保留人工確認** | 成片與 AI 評論回覆都要經過「待審」佇列，人工點通過才發出 |
@@ -31,16 +31,19 @@
 
 ## 2. 分階段計畫
 
-總計約 **8～9 週**做出可以給帳號群實際運作的版本（1～2 名全端工程師）。
+總計約 **8～9 週**做出可以給帳號群實際運作的版本。
+
+開發方式：Claude 在雲端環境寫程式、測試並推送到 GitHub；每完成一個可部署的進度，使用者在伺服器執行 `bash infra/scripts/deploy.sh` 更新（見 05-server-setup.md）。
 
 ### Phase 0：基礎建設（第 1 週）
 
 - [x] 專案骨架、調研、架構文件
+- [x] 購買 VPS、初始化（Docker、資料碟、防火牆）、壓測通過
 - [ ] Docker Compose：PostgreSQL + pgvector、Redis、MinIO、tusd、Caddy（HTTPS）
 - [ ] FastAPI 骨架、Alembic 遷移、登入（先做管理員帳號 + 拍攝員帳號兩種角色）
 - [ ] `ai_provider` 模組 + `usage_ledger` 成本記錄表
-- [ ] 前端骨架（PWA，手機優先）、CI（lint + test）
-- [ ] 在新加坡 VPS 上跑起來
+- [ ] 前端骨架（PWA，手機優先）、CI（GitHub 自動跑 lint + test，不涉及部署）
+- [ ] 在 VPS 上用 deploy.sh 部署起來
 
 **驗收**：用網域加 HTTPS 開得了後台，可以登入，並能從後台測試呼叫一次 DeepSeek 和豆包，看到成本記錄。
 
@@ -70,7 +73,7 @@
 - [ ] FFmpeg 輸出 1080×1920 成片
 - [ ] 矩陣差異化：同一模板產出的 N 支影片，素材組合、順序、BGM、字幕樣式各不相同
 - [ ] 作品庫：**待審佇列**（預覽 → 通過 / 退回並附原因 → 可單鏡頭換素材後重新渲染）
-- [ ] 在 VPS 上壓測渲染耗時
+- [ ] 用真實素材和完整濾鏡再壓測一次渲染耗時
 
 **驗收**：選一個模板 + 帳號檔案，一鍵產生 5 支彼此不重複的英文成片，人工審核通過率達 60% 以上。
 
