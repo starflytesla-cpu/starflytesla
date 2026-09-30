@@ -45,5 +45,8 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/ops_key
           chmod 600 ~/.ssh/ops_key
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # 每 15 秒送一次保持連線訊號：伺服器前端的防護設備會切斷閒置約 2 分鐘的連線，
+          # 部署時的長時間步驟（例如下載程式碼逾時）才不會被中途切斷、看不到錯誤訊息
           ssh -i ~/.ssh/ops_key -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=12 \
             "root@$HOST" "$COMMAND"
