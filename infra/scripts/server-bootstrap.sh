@@ -112,7 +112,12 @@ echo "$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/90-$DEPLOY_USER"
 chmod 440 "/etc/sudoers.d/90-$DEPLOY_USER"
 if [[ -s /root/.ssh/authorized_keys ]]; then
   install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh"
-  install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /root/.ssh/authorized_keys "/home/$DEPLOY_USER/.ssh/authorized_keys"
+  AUTH_KEYS="/home/$DEPLOY_USER/.ssh/authorized_keys"
+  # 合併而不是覆蓋，避免洗掉之後加入的部署金鑰
+  MERGED=$(cat "$AUTH_KEYS" /root/.ssh/authorized_keys 2>/dev/null | awk 'NF && !seen[$0]++')
+  printf '%s\n' "$MERGED" > "$AUTH_KEYS"
+  chown "$DEPLOY_USER:$DEPLOY_USER" "$AUTH_KEYS"
+  chmod 600 "$AUTH_KEYS"
   echo "已複製 SSH 公鑰給 $DEPLOY_USER"
 fi
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$BASE_DIR/starfly"
