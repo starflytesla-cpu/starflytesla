@@ -41,7 +41,7 @@ main() {
     echo "==> 已建立 .env"
   fi
   local new_admin=""
-  for name in POSTGRES_PASSWORD MINIO_ROOT_PASSWORD SECRET_KEY ADMIN_PASSWORD; do
+  for name in POSTGRES_PASSWORD SECRET_KEY ADMIN_PASSWORD; do
     if randomize_placeholder "$name"; then
       echo "    已產生隨機的 $name"
       if [[ $name == ADMIN_PASSWORD ]]; then new_admin=yes; fi

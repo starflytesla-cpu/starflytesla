@@ -1,5 +1,5 @@
 # Starfly 全套服務。部署請用 infra/scripts/deploy.sh，它會自動建立 .env 並套用這個檔案。
-# 對外只開放 web（Caddy）的 80 / 443；資料庫、API、MinIO 只在 Compose 內部網路。
+# 對外只開放 web（Caddy）的 80 / 443；資料庫與 API 只在 Compose 內部網路。
 name: starfly
 
 services:
@@ -17,19 +17,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-
-  # 素材與成片的檔案儲存（Phase 1 開始使用）。管理介面只綁在本機，需要時用 SSH 通道存取。
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?請先執行 deploy.sh 產生密碼}
-    volumes:
-      - minio-data:/data
-    ports:
-      - "127.0.0.1:9001:9001"
 
   api:
     build: ../services/api
@@ -61,6 +48,5 @@ services:
 
 volumes:
   pg-data:
-  minio-data:
   caddy-data:
   caddy-config:
