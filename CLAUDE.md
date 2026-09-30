@@ -47,6 +47,7 @@
 - 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`logs <api|web|postgres> [行數]`、`deploy`、`restart <api|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
 - 推送到 `claude/exciting-fermi-nad1gj` 且 CI 通過後，Ops 會自動執行 `deploy`（部署完會跑 `smoke`）。
 - 需要使用者先在伺服器執行 `setup-ops.sh` 並設定 `OPS_HOST` / `OPS_KNOWN_HOSTS` / `OPS_SSH_KEY` 三個 Secrets；未設定時 workflow 會顯示警告並略過。
+- 這台伺服器的主機商模板預設**關閉金鑰登入**（回應 `Permission denied (password)`），需在伺服器執行 `bash infra/scripts/enable-ssh-key.sh` 開啟（2026-09-30 已請使用者執行）。
 
 ### 從使用者的 Mac 操作伺服器
 

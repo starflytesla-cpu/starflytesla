@@ -158,18 +158,24 @@ CONF
 
 # ---------------------------------------------------------------- 7. SSH
 log "7/7 SSH 安全設定"
+# 有些主機商模板預設關閉金鑰登入（只剩密碼），先確保金鑰登入開啟。
+# 放在 00- 開頭的檔案，sshd 取第一個出現的設定值，才能蓋過模板的設定。
+cat > /etc/ssh/sshd_config.d/00-starfly-pubkey.conf <<CONF
+PubkeyAuthentication yes
+AuthenticationMethods any
+CONF
 if [[ ${DISABLE_SSH_PASSWORD:-} == yes && -s /root/.ssh/authorized_keys ]]; then
   cat > /etc/ssh/sshd_config.d/10-starfly.conf <<CONF
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
 CONF
-  sshd -t
-  systemctl reload ssh 2>/dev/null || systemctl restart ssh
   echo "已關閉密碼登入，之後只能用 SSH 金鑰登入（root 或 $DEPLOY_USER）"
 else
   warn "保留 SSH 密碼登入。確認金鑰登入可用後，用 DISABLE_SSH_PASSWORD=yes 重跑本腳本即可關閉。"
 fi
+sshd -t
+systemctl reload ssh 2>/dev/null || systemctl restart ssh
 
 log "完成"
 cat <<EOF
