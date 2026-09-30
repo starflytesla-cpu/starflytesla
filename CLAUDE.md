@@ -61,11 +61,9 @@
 
 ### 待處理問題
 
-- **2026-09-30 登入卡住**：正式伺服器部署完成，`http://50.114.172.174` 的登入頁可以開啟，但按「登入」後一直轉圈。登入頁能出現，推測 `GET /api/auth/me` 有回應，`POST /api/auth/login` 則沒有回應（尚未證實）。排查順序：
-  1. `docker compose -f infra/docker-compose.yml ps` 以及 `logs --tail 100 api web`
-  2. 在伺服器上用 curl 打 `http://localhost/api/auth/login`（密碼在 `.env` 的 `ADMIN_PASSWORD`），確認後端本身是否正常
-  3. 使用者人在美國，可以排除跨境網路干擾；問題應該在伺服器端（容器狀態、API 是否卡住、Caddy 轉發、資料庫連線）。若伺服器本機 curl 也卡住，查 api 容器記錄與 `docker compose exec api python -c ...` 逐步縮小範圍。
-  4. 還沒有網域時，可以先用免費的 `50-114-172-174.sslip.io`（自動解析到伺服器 IP）當 `SITE_ADDRESS`，Caddy 會自動申請 Let's Encrypt 憑證，網站就有 HTTPS。修改前先跟使用者確認。
+- **2026-09-30 登入卡住（已查明，不是程式問題）**：用維運通道查證，伺服器上經由 Caddy 登入 0.38 秒成功；後端記錄顯示使用者瀏覽器只送達過 2 次 `GET /api/auth/me`，`POST /api/auth/login` 從未到達。使用者流量來自 `137.175.62.129`（AS54600 PEG TECH 機房 IP），代表 Mac 開著 VPN / 代理，登入請求在代理那一段遺失。處理方式：請使用者關閉代理（或把伺服器 IP 設成直連）再試；長期用 HTTPS 避免中間設備干擾明文 HTTP。
+- **2026-09-30 伺服器無法對外連線（待主機商處理）**：約 UTC 16:25 之後，伺服器連 github.com、google.com、pypi.org 全部逾時，外部連入（22 / 80）正常，ufw 對外為全部允許。影響：`deploy.sh` 的 `git pull` 失敗（維運通道的 deploy 也會失敗）、AI 渠道無法呼叫、Let's Encrypt 無法申請憑證。已請使用者聯絡主機商 QQG.NET。恢復後先跑 Ops `status`，再 `deploy` 部署最新版本（伺服器目前停在 29ad859 的程式碼、624d568 的部署）。
+- 伺服器需要重新開機（系統更新後顯示 `System restart required`），等上述問題處理完、取得使用者同意後再安排。
 
 ### 在伺服器上操作時的規則
 
