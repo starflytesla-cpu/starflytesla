@@ -24,6 +24,19 @@ randomize_placeholder() {
   fi
 }
 
+# 把 .env.example 有、但 .env 缺少的變數補上（舊版建立的 .env 或新增設定時）。
+add_missing_vars() {
+  local line name
+  while IFS= read -r line; do
+    [[ $line =~ ^([A-Z_][A-Z0-9_]*)= ]] || continue
+    name=${BASH_REMATCH[1]}
+    if ! grep -qE "^${name}=" .env; then
+      printf '%s\n' "$line" >> .env
+      echo "    補上缺少的設定 $name"
+    fi
+  done < .env.example
+}
+
 env_value() {
   grep -E "^$1=" .env | head -1 | cut -d= -f2- || true
 }
@@ -40,6 +53,7 @@ main() {
     chmod 600 .env
     echo "==> 已建立 .env"
   fi
+  add_missing_vars
   local new_admin=""
   for name in POSTGRES_PASSWORD SECRET_KEY ADMIN_PASSWORD; do
     if randomize_placeholder "$name"; then
