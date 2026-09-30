@@ -26,8 +26,7 @@
 | [docs/02-architecture.md](docs/02-architecture.md) | 系統架構、技術選型、模組拆分、資料模型草稿 |
 | [docs/03-vps-sizing.md](docs/03-vps-sizing.md) | VPS 配置建議（入門 / 推薦 / 上限）與容量估算 |
 | [docs/04-roadmap.md](docs/04-roadmap.md) | 執行方案 v1：已確定的決策、AI 分工、分階段計畫、成本估算、風險 |
-| [docs/05-server-setup.md](docs/05-server-setup.md) | 伺服器初始化步驟：SSH 金鑰、初始化腳本、壓測、網域 |
-| [docs/06-deploy.md](docs/06-deploy.md) | GitHub Actions 自動部署：運作方式、一次性設定、日常使用 |
+| [docs/05-server-setup.md](docs/05-server-setup.md) | 伺服器初始化與部署：一行指令初始化、壓測、部署更新 |
 
 ## 目錄結構（規劃）
 

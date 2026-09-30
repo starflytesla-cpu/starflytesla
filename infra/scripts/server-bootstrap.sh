@@ -2,6 +2,10 @@
 # 新 VPS 初始化（Ubuntu 22.04 / 24.04），用 root 執行一次：
 #   bash server-bootstrap.sh
 #
+# 非互動執行時（例如由 Claude Code 代為執行）可用環境變數確認危險步驟：
+#   FORMAT_DATA_DISK=yes      同意格式化偵測到的空白資料碟
+#   DISABLE_SSH_PASSWORD=yes  關閉 SSH 密碼登入（務必先確認金鑰登入可用）
+#
 # 會做的事：
 #   1. 系統更新、安裝基本工具（含 ffmpeg，供壓測使用）
 #   2. 掛載資料碟到 /data（只有在找到「完全空白」的磁碟且你輸入 yes 時才會格式化）
@@ -9,7 +13,7 @@
 #   4. 安裝 Docker，並把 Docker 資料放到 /data/docker
 #   5. 建立部署用帳號 starfly（有 sudo 與 docker 權限），複製 root 的 SSH 公鑰
 #   6. 防火牆只開 SSH / 80 / 443，並啟用 fail2ban 與自動安全更新
-#   7. 若已設定 SSH 公鑰，關閉 SSH 密碼登入
+#   7. 指定 DISABLE_SSH_PASSWORD=yes 時，關閉 SSH 密碼登入
 #
 # 可以重複執行，已完成的步驟會跳過。
 set -euo pipefail
@@ -54,7 +58,10 @@ else
   else
     echo
     warn "找到空白磁碟 $CANDIDATE（$(lsblk -dno SIZE "$CANDIDATE")），將格式化為 ext4 並掛載到 $DATA_MOUNT。"
-    read -r -p "確認格式化 $CANDIDATE？輸入 yes 繼續，其他任意鍵跳過：" ans || ans=""
+    ans=${FORMAT_DATA_DISK:-}
+    if [[ -z $ans && -t 0 ]]; then
+      read -r -p "確認格式化 $CANDIDATE？輸入 yes 繼續，其他任意鍵跳過：" ans || ans=""
+    fi
     if [[ $ans == yes ]]; then
       mkfs.ext4 -q -L data "$CANDIDATE"
       mkdir -p "$DATA_MOUNT"
@@ -62,7 +69,7 @@ else
       mount "$DATA_MOUNT"
       echo "已掛載：$(df -h "$DATA_MOUNT" | awk 'NR==2{print $2" 總容量"}')"
     else
-      echo "略過資料碟"
+      echo "略過資料碟（非互動執行時，加上 FORMAT_DATA_DISK=yes 才會格式化）"
     fi
   fi
 fi
@@ -151,7 +158,7 @@ CONF
 
 # ---------------------------------------------------------------- 7. SSH
 log "7/7 SSH 安全設定"
-if [[ -s /root/.ssh/authorized_keys ]]; then
+if [[ ${DISABLE_SSH_PASSWORD:-} == yes && -s /root/.ssh/authorized_keys ]]; then
   cat > /etc/ssh/sshd_config.d/10-starfly.conf <<CONF
 PasswordAuthentication no
 KbdInteractiveAuthentication no
@@ -161,7 +168,7 @@ CONF
   systemctl reload ssh 2>/dev/null || systemctl restart ssh
   echo "已關閉密碼登入，之後只能用 SSH 金鑰登入（root 或 $DEPLOY_USER）"
 else
-  warn "root 還沒有設定 SSH 公鑰，所以保留密碼登入。設定好金鑰後重跑本腳本即可關閉密碼登入。"
+  warn "保留 SSH 密碼登入。確認金鑰登入可用後，用 DISABLE_SSH_PASSWORD=yes 重跑本腳本即可關閉。"
 fi
 
 log "完成"
@@ -172,7 +179,6 @@ cat <<EOF
   專案目錄     : $BASE_DIR/starfly
   防火牆       : 開放 $SSH_PORT / 80 / 443
 
-下一步：執行壓測
-  curl -fsSL https://raw.githubusercontent.com/starflytesla-cpu/starflytesla/claude/exciting-fermi-nad1gj/infra/bench/vps-bench.sh -o vps-bench.sh
-  bash vps-bench.sh
+下一步：在專案目錄執行壓測
+  bash infra/bench/vps-bench.sh
 EOF

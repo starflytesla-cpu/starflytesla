@@ -25,3 +25,4 @@ data/
 .DS_Store
 .idea/
 .vscode/
+.deploy-history.log
