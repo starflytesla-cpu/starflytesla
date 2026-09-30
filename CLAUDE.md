@@ -39,6 +39,23 @@
 - 部署 / 更新：在專案根目錄執行 `bash infra/scripts/deploy.sh`（git pull → docker compose up --build --wait）。
 - 壓測：`bash infra/bench/vps-bench.sh`
 
+### 從使用者的 Mac 操作伺服器
+
+雲端開發環境無法連到伺服器；在使用者 Mac 上執行的 Claude Code 可以直接用 SSH 操作。
+
+- 連線：`ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes root@50.114.172.174 '<指令>'`
+- 金鑰登入可能還沒設定好（之前 ssh-copy-id 失敗過）。如果上面的指令回報 Permission denied，請使用者**自己在終端機**執行下面這行並輸入一次 root 密碼（Claude 的指令視窗無法輸入密碼）：
+  `cat ~/.ssh/id_ed25519.pub | ssh -o PubkeyAuthentication=no root@50.114.172.174 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"`
+- 伺服器上的專案在 `/root/starflytesla`。改程式碼一律在 Mac 端改好、commit、push 到 `claude/exciting-fermi-nad1gj`，再到伺服器執行 `cd /root/starflytesla && bash infra/scripts/deploy.sh`；不要直接在伺服器上改程式碼。
+- 使用者曾在 Mac 上誤跑過 deploy.sh，Mac 上可能有一份本機部署。確認後可以用 `docker compose -f infra/docker-compose.yml down`（不要加 `-v`）停掉。
+
+### 待處理問題
+
+- **2026-09-30 登入卡住**：正式伺服器部署完成，`http://50.114.172.174` 的登入頁可以開啟，但按「登入」後一直轉圈。登入頁能出現，推測 `GET /api/auth/me` 有回應，`POST /api/auth/login` 則沒有回應（尚未證實）。排查順序：
+  1. `docker compose -f infra/docker-compose.yml ps` 以及 `logs --tail 100 api web`
+  2. 在伺服器上用 curl 打 `http://localhost/api/auth/login`（密碼在 `.env` 的 `ADMIN_PASSWORD`），確認後端本身是否正常
+  3. 若伺服器本機正常，問題就在使用者網路到伺服器之間。使用者可能在中國大陸，明文 HTTP 可能被干擾，應優先設定網域 + HTTPS。
+
 ### 在伺服器上操作時的規則
 
 - **以下動作要先向使用者說明並取得同意**：格式化磁碟（`FORMAT_DATA_DISK=yes`）、關閉 SSH 密碼登入（`DISABLE_SSH_PASSWORD=yes`，必須先確認使用者的金鑰登入可用，否則會被鎖在外面）、修改防火牆、刪除資料或 Docker volume、重開機。
@@ -56,6 +73,7 @@
 - [x] 調研、架構、執行方案、VPS 選購
 - [x] 伺服器初始化與壓測（2026-09-30）：steal 0%，30 秒成片約 30 秒渲染；專案 clone 在伺服器的 `/root/starflytesla`
 - [x] Phase 0 程式完成（2026-09-30）：登入 / 帳號、模型渠道、`ai_provider` + `usage_ledger`、後台網頁、Caddy、deploy.sh 自動產生密碼
-- [ ] Phase 0 部署到正式伺服器，並用真實 API Key 測試 DeepSeek 與豆包
+- [x] Phase 0 部署到正式伺服器（2026-09-30）
+- [ ] 解決登入卡住（見「待處理問題」），再用真實 API Key 測試 DeepSeek 與豆包
 - [ ] Phase 1：素材中心
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP

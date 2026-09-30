@@ -95,7 +95,9 @@ export type ModelInput = {
 }
 
 export const api = {
-  login: (email: string, password: string) => http.post<User>('/auth/login', { email, password }),
+  // 登入不該等太久：20 秒沒回應就顯示錯誤，而不是一直轉圈
+  login: (email: string, password: string) =>
+    http.post<User>('/auth/login', { email, password }, { timeout: 20_000 }),
   logout: () => http.post<null>('/auth/logout'),
   me: () => http.get<User>('/auth/me'),
   changePassword: (old_password: string, new_password: string) =>
