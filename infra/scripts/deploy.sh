@@ -85,7 +85,12 @@ main() {
     echo
     echo "    第一次部署，管理員登入資訊（請立即登入並在右上角「修改密碼」）："
     echo "      帳號：$(env_value ADMIN_EMAIL)"
-    echo "      密碼：$(env_value ADMIN_PASSWORD)"
+    # 由 GitHub Actions 執行時記錄是公開的，不能印出密碼
+    if [[ -n ${DEPLOY_HIDE_SECRETS:-} ]]; then
+      echo "      密碼：請在伺服器執行 grep ADMIN_PASSWORD .env 查看"
+    else
+      echo "      密碼：$(env_value ADMIN_PASSWORD)"
+    fi
   fi
 }
 

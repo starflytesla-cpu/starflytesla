@@ -39,6 +39,15 @@
 - 部署 / 更新：在專案根目錄執行 `bash infra/scripts/deploy.sh`（git pull → docker compose up --build --wait）。
 - 壓測：`bash infra/bench/vps-bench.sh`
 
+### Claude 操作伺服器的方式：GitHub Actions 維運通道（首選）
+
+雲端開發環境不能直接 SSH 到伺服器，改用 `.github/workflows/ops.yml`：
+
+- 用 GitHub MCP 的 `actions_run_trigger`（`run_workflow`，workflow `ops.yml`，ref `claude/exciting-fermi-nad1gj`，inputs `{"command": "..."}`）觸發，再用 `actions_list` / `get_job_logs` 讀結果。
+- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`logs <api|web|postgres> [行數]`、`deploy`、`restart <api|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
+- 推送到 `claude/exciting-fermi-nad1gj` 且 CI 通過後，Ops 會自動執行 `deploy`（部署完會跑 `smoke`）。
+- 需要使用者先在伺服器執行 `setup-ops.sh` 並設定 `OPS_HOST` / `OPS_KNOWN_HOSTS` / `OPS_SSH_KEY` 三個 Secrets；未設定時 workflow 會顯示警告並略過。
+
 ### 從使用者的 Mac 操作伺服器
 
 雲端開發環境無法連到伺服器；在使用者 Mac 上執行的 Claude Code 可以直接用 SSH 操作。

@@ -76,6 +76,36 @@ cd starflytesla && bash infra/scripts/deploy.sh
 docker compose -f infra/docker-compose.yml logs --tail 100 api
 ```
 
+## 讓 Claude 直接操作伺服器（GitHub Actions 維運通道）
+
+設定一次之後，Claude 可以自己觸發 GitHub Actions 在伺服器上查狀態、看記錄、部署、重啟，並讀取結果，不需要使用者中轉。推送的程式碼通過 CI 後也會自動部署。
+
+安全設計：專用金鑰在伺服器上被鎖定成**只能執行 `infra/scripts/ops.sh` 的固定指令**（status / smoke / logs / deploy / restart），不能開 shell、不能轉發 port；輸出會遮罩 IP 與 Email，也不會印出任何密碼（倉庫是公開的，Actions 記錄任何人都看得到）。
+
+### 一次性設定（約 3 分鐘）
+
+1. 登入伺服器後執行：
+
+   ```bash
+   cd /root/starflytesla && git pull && bash infra/scripts/setup-ops.sh
+   ```
+
+2. 腳本會印出 3 段內容。打開 https://github.com/starflytesla-cpu/starflytesla/settings/secrets/actions ，按 **New repository secret**，依序新增：
+
+   | Name | 內容 |
+   | --- | --- |
+   | `OPS_HOST` | 伺服器 IP |
+   | `OPS_KNOWN_HOSTS` | 以 IP 開頭的那一行 |
+   | `OPS_SSH_KEY` | 從 `-----BEGIN` 到 `-----END` 的整段（兩行都要包含） |
+
+3. 在伺服器上執行 `clear` 清掉畫面上的私鑰。
+
+### 使用方式
+
+- Claude 透過 GitHub 介面觸發 **Ops** workflow 並讀取記錄。
+- 使用者也可以手動執行：GitHub → Actions → Ops → Run workflow，輸入 `status`、`smoke`、`logs api 200`、`deploy` 或 `restart api`。
+- 要停用：在伺服器上刪除 `/root/.ssh/authorized_keys` 裡結尾為 `github-actions-ops` 的那一行，或刪除 GitHub 上的 `OPS_SSH_KEY`。
+
 ## 網域與 HTTPS
 
 1. 買一個網域（例如在 Cloudflare、Namecheap 購買）。
