@@ -3,9 +3,9 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
-# 素材分析（轉檔、切鏡頭、擷取畫面）需要 FFmpeg
+# 素材分析與成片渲染需要 FFmpeg；字幕字型：Noto（拉丁 / 阿拉伯 / 泰文）與 Noto CJK（中日韓）
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg fonts-noto-core fonts-noto-cjk \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

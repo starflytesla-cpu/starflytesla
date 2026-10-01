@@ -7,7 +7,7 @@
 #   status                 版本、容器狀態、健康檢查、磁碟與記憶體
 #   smoke                  透過網站入口與直連 API 測試健康檢查與管理員登入（只顯示狀態碼與耗時）
 #   logs <服務> [行數]      服務：api / worker / web / postgres；行數最多 500；IP 與 Email 會遮罩
-#   queue                  背景任務佇列與素材狀態統計、最近的失敗原因
+#   queue                  背景任務佇列、素材與成片狀態統計、最近的失敗原因
 #   deploy                 執行 deploy.sh，完成後自動跑 smoke
 #   restart <服務>          重啟 api / worker / web
 #
@@ -101,6 +101,8 @@ cmd_queue() {
 SELECT type, status, count(*) FROM tasks GROUP BY 1, 2 ORDER BY 1, 2;
 \echo '== 素材（status / 數量）'
 SELECT status, count(*) FROM assets GROUP BY 1 ORDER BY 1;
+\echo '== 成片（status / 數量 / 平均渲染秒數）'
+SELECT status, count(*), round(avg(render_seconds)::numeric, 1) AS avg_render_s FROM videos GROUP BY 1 ORDER BY 1;
 \echo '== 最近 10 筆失敗或重試中的任務'
 SELECT to_char(created_at, 'MM-DD HH24:MI') AS created, type, status, attempts, left(error, 160) AS error
 FROM tasks WHERE error <> '' ORDER BY created_at DESC LIMIT 10;

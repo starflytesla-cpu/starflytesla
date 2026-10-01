@@ -266,6 +266,94 @@ export interface AudioResult {
   cost_usd: number | null
 }
 
+// ---------------------------------------------------------------- 成片、任務
+export type VideoStatus = 'queued' | 'rendering' | 'pending_review' | 'approved' | 'rejected' | 'failed'
+
+export interface Video {
+  id: string
+  batch_id: string
+  script_id: string | null
+  profile_id: string | null
+  title: string
+  template_name: string
+  profile_name: string
+  language: string
+  status: VideoStatus
+  stage: string
+  error: string
+  style: string
+  duration: number | null
+  render_seconds: number | null
+  review_note: string
+  reviewed_at: string | null
+  created_at: string
+  rendered_at: string | null
+  video_url: string | null
+  poster_url: string | null
+}
+
+export interface VideoSegment {
+  clip_id: string
+  duration: number
+  thumb_url: string | null
+  scene: string
+  description: string
+  filename: string
+}
+
+export interface VideoShot {
+  index: number
+  brief: string
+  scene: string
+  caption: string
+  voiceover: string
+  start: number
+  duration: number
+  segments: VideoSegment[]
+}
+
+export interface VideoDetail extends Video {
+  shots: VideoShot[]
+  voice_id: string | null
+  ambience: number | null
+}
+
+export interface ClipCandidate {
+  clip_id: string
+  kind: 'video' | 'image'
+  length: number | null
+  quality: Quality
+  scene_match: boolean
+  thumb_url: string
+  scene: string
+  description: string
+  filename: string
+}
+
+export interface Coverage {
+  total_clips: number
+  tts_ready: boolean
+  scripts: { id: string; shots: { scene: string; clips: number }[] }[]
+}
+
+export type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export interface TaskItem {
+  id: string
+  type: string
+  type_label: string
+  target: string
+  label: string
+  status: TaskStatus
+  attempts: number
+  max_attempts: number
+  error: string
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  run_after: string
+}
+
 export type ClipInput = Partial<{
   scene: string
   subjects: string[]
@@ -354,6 +442,29 @@ export const api = {
   voicePreview: (body: { voice_id: string; text: string; speed: number }) =>
     http.post<AudioResult>('/voices/preview', body, { timeout: 200_000 }),
 
+  videos: (params: { limit: number; offset: number; status?: VideoStatus; script_id?: string }) =>
+    http.get<{ items: Video[]; total: number }>('/videos', params),
+  videoStats: () => http.get<Record<VideoStatus, number>>('/videos/stats'),
+  videoStyles: () => http.get<Record<string, string>>('/videos/styles'),
+  videoCoverage: (script_ids: string[]) => http.post<Coverage>('/videos/coverage', { script_ids }),
+  generateVideos: (body: { script_ids: string[]; per_script: number; style: string; ambience: number }) =>
+    http.post<Video[]>('/videos/generate', body),
+  video: (id: string) => http.get<VideoDetail>(`/videos/${id}`),
+  reviewVideo: (id: string, action: 'approve' | 'reject', note = '') =>
+    http.post<VideoDetail>(`/videos/${id}/review`, { action, note }),
+  videoCandidates: (id: string, shot: number) => http.get<ClipCandidate[]>(`/videos/${id}/candidates`, { shot }),
+  replaceVideoClip: (id: string, shot_index: number, clip_id: string) =>
+    http.post<VideoDetail>(`/videos/${id}/replace`, { shot_index, clip_id }),
+  rerenderVideo: (id: string, reshuffle: boolean) => http.post<VideoDetail>(`/videos/${id}/rerender`, { reshuffle }),
+  deleteVideo: (id: string) => http.delete<null>(`/videos/${id}`),
+
+  tasks: (params: { limit: number; offset: number; status?: TaskStatus; type?: string }) =>
+    http.get<{ items: TaskItem[]; total: number; counts: Partial<Record<TaskStatus, number>>; types: Record<string, string> }>(
+      '/tasks',
+      params,
+    ),
+  retryTask: (id: string) => http.post<TaskItem>(`/tasks/${id}/retry`),
+
   usage: (params: { limit: number; offset: number; status?: string }) =>
     http.get<{ items: UsageItem[]; total: number }>('/usage', params),
   usageSummary: () =>
@@ -387,6 +498,22 @@ export const SCRIPT_STATUS: Record<ScriptStatus, { label: string; color: string 
   generating: { label: '產生中', color: 'processing' },
   draft: { label: '草稿', color: 'default' },
   approved: { label: '已核准', color: 'success' },
+  failed: { label: '失敗', color: 'error' },
+}
+
+export const VIDEO_STATUS: Record<VideoStatus, { label: string; color: string }> = {
+  queued: { label: '排隊中', color: 'default' },
+  rendering: { label: '渲染中', color: 'processing' },
+  pending_review: { label: '待審', color: 'gold' },
+  approved: { label: '已通過', color: 'success' },
+  rejected: { label: '已退回', color: 'red' },
+  failed: { label: '失敗', color: 'error' },
+}
+
+export const TASK_STATUS: Record<TaskStatus, { label: string; color: string }> = {
+  queued: { label: '排隊中', color: 'default' },
+  running: { label: '執行中', color: 'processing' },
+  succeeded: { label: '完成', color: 'success' },
   failed: { label: '失敗', color: 'error' },
 }
 

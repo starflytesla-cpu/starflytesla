@@ -364,3 +364,48 @@ class Script(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+# ---------------------------------------------------------------- Phase 3 混剪成片
+class Video(Base):
+    """一支成片：由一份已核准的文案 + 自動挑選的素材鏡頭 + 配音 + 字幕合成。
+
+    status：queued 排隊 → rendering 渲染中 → pending_review 待審 → approved 通過 / rejected 退回；failed 失敗
+    timeline 是完整的時間軸 JSON（每個鏡頭用了哪些素材片段、配音檔、字幕），換素材後依它重新渲染。
+    """
+
+    __tablename__ = "videos"
+    __table_args__ = (Index("ix_videos_tenant_created", "tenant_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    script_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scripts.id", ondelete="SET NULL"), index=True
+    )
+    profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("brand_profiles.id", ondelete="SET NULL"), index=True
+    )
+    batch_id: Mapped[str] = mapped_column(String(36), index=True)
+    # 文案被刪除後仍看得出來源
+    title: Mapped[str] = mapped_column(String(200), default="")
+    template_name: Mapped[str] = mapped_column(String(80), default="")
+    profile_name: Mapped[str] = mapped_column(String(80), default="")
+    language: Mapped[str] = mapped_column(String(16), default="en")
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    stage: Mapped[str] = mapped_column(String(200), default="")
+    error: Mapped[str] = mapped_column(String(500), default="")
+    # 產生選項：字幕樣式、環境音量、隨機種子
+    options: Mapped[dict] = mapped_column(JSON, default=dict)
+    timeline: Mapped[dict | None] = mapped_column(JSON)
+    duration: Mapped[float | None] = mapped_column(Float)
+    has_output: Mapped[bool] = mapped_column(Boolean, default=False)
+    render_seconds: Mapped[float | None] = mapped_column(Float)
+    review_note: Mapped[str] = mapped_column(String(500), default="")
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    rendered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

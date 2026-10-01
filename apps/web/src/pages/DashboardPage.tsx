@@ -108,7 +108,7 @@ export default function DashboardPage() {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
           <Card title="開發進度">
-            <Steps orientation="vertical" size="small" current={3} items={PHASES} />
+            <Steps orientation="vertical" size="small" current={4} items={PHASES} />
           </Card>
         </Col>
         <Col xs={24} lg={10}>

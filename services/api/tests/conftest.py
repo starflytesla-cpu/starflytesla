@@ -43,7 +43,7 @@ def _migrate():
 def _clean_db():
     with get_engine().begin() as conn:
         conn.execute(
-            text("TRUNCATE scripts, templates, brand_profiles, tasks, clips, assets, uploads, usage_ledger, channel_models, model_channels, users, tenants CASCADE")
+            text("TRUNCATE videos, scripts, templates, brand_profiles, tasks, clips, assets, uploads, usage_ledger, channel_models, model_channels, users, tenants CASCADE")
         )
     login_limiter._failures.clear()
     shutil.rmtree(MEDIA_ROOT, ignore_errors=True)

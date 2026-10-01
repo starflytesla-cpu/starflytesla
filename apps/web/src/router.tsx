@@ -11,6 +11,9 @@ import AssetsPage from './pages/assets/AssetsPage'
 import ProfilesPage from './pages/ProfilesPage'
 import TemplatesPage from './pages/templates/TemplatesPage'
 import VoicesPage from './pages/VoicesPage'
+import EditorPage from './pages/EditorPage'
+import TasksPage from './pages/TasksPage'
+import WorksPage from './pages/works/WorksPage'
 import UsersPage from './pages/UsersPage'
 
 const comingSoon = WORK_ITEMS.filter((item) => item.phase).map((item) => ({
@@ -49,6 +52,30 @@ export const router = createBrowserRouter([
         element: (
           <AdminOnly>
             <TemplatesPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'editor',
+        element: (
+          <AdminOnly>
+            <EditorPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'works',
+        element: (
+          <AdminOnly>
+            <WorksPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'tasks',
+        element: (
+          <AdminOnly>
+            <TasksPage />
           </AdminOnly>
         ),
       },

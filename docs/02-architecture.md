@@ -15,6 +15,11 @@
 > **Phase 2 實作後的調整（2026-10-01）**
 > - 資料表：`brand_profiles`（帳號檔案，含音色）、`templates`（tenant_id 為空 = 內建，鏡頭存 JSON）、`scripts`（每個版本一筆，同批共用 batch_id）。不另建 template_shot 表。
 > - 內建模板寫在 `app/services/template_library.py`，API 啟動時同步；配音用 kie.ai 的 ElevenLabs（建立任務 → 輪詢 → 下載 mp3），試聽檔存在 `/media/{tenant}/tts/`，7 天後自動清除。
+>
+> **Phase 3 實作後的調整（2026-10-01）**
+> - 成片表 `videos`（取代草稿中的 job / video）：一支成片一筆，`timeline` 存完整時間軸，`options` 存字幕樣式、環境音量、隨機種子；同批共用 batch_id。
+> - 渲染在 worker（任務 `video.render`）：逐段正規化素材 → 串接 → 燒字幕並混音，輸出 `/media/{tenant}/videos/{id}/final.mp4`；成片配音快取在 `/media/{tenant}/tts-cache/`（不對外提供）。
+> - 挑素材暫不用向量檢索，改用場景 / 標籤 / 品質 / 使用次數加權；素材量大後再加 pgvector。
 
 ## 1. 總覽
 

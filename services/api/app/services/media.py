@@ -258,3 +258,115 @@ def frame_signature(image: Path) -> tuple[int, float]:
 
 def hamming(a: int, b: int) -> int:
     return ((a ^ b) & ((1 << 64) - 1)).bit_count()
+
+
+# ---------------------------------------------------------------- 成片渲染（Phase 3）
+OUT_W, OUT_H, OUT_FPS = 1080, 1920, 30
+AUDIO_RATE = 48000
+
+
+def audio_duration(path: Path) -> float:
+    out, _ = run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+        timeout=60,
+    )
+    value = _fraction(out.decode().strip())
+    if not value:
+        raise MediaError("無法讀取配音長度")
+    return value
+
+
+def _even(value: float) -> int:
+    return int(round(value / 2)) * 2
+
+
+def render_segment(
+    src: Path, dest: Path, *, kind: str, start: float, duration: float, zoom: float = 1.0, has_audio: bool = False
+) -> None:
+    """把一段素材正規化成 1080x1920、30fps、H.264 + 48kHz 立體聲，方便之後直接串接。
+
+    影片：裁切填滿畫面，zoom > 1 時稍微放大（矩陣號差異化）；照片：緩慢推近（Ken Burns）。
+    素材本身的聲音保留下來當環境音，沒有聲音時補靜音。
+    """
+    dur = f"{duration:.3f}"
+    silence = ["-f", "lavfi", "-t", dur, "-i", f"anullsrc=r={AUDIO_RATE}:cl=stereo"]
+    if kind == "image":
+        frames = max(1, round(duration * OUT_FPS))
+        inputs = ["-loop", "1", "-framerate", str(OUT_FPS), "-t", dur, "-i", str(src), *silence]
+        video = (
+            f"[0:v]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},"
+            f"zoompan=z='min(1+0.08*on/{frames},1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s={OUT_W}x{OUT_H}:fps={OUT_FPS},setsar=1,format=yuv420p[v]"
+        )
+        audio_map = "1:a"
+        graph = video
+    else:
+        w, h = _even(OUT_W * zoom), _even(OUT_H * zoom)
+        inputs = ["-ss", f"{start:.3f}", "-t", dur, "-i", str(src), *silence]
+        graph = (
+            f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},"
+            # 素材比需要的短時，停在最後一格補足長度，避免畫面比配音先結束
+            f"setsar=1,fps={OUT_FPS},tpad=stop_mode=clone:stop_duration={dur},format=yuv420p[v]"
+        )
+        if has_audio:
+            graph += f";[0:a]aresample={AUDIO_RATE},aformat=channel_layouts=stereo,apad[a]"
+            audio_map = "[a]"
+        else:
+            audio_map = "1:a"
+    run(
+        [
+            *FFMPEG, *inputs,
+            "-filter_complex", graph, "-map", "[v]", "-map", audio_map, "-t", dur,
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-r", str(OUT_FPS),
+            "-c:a", "aac", "-b:a", "160k", "-ar", str(AUDIO_RATE), "-ac", "2",
+            str(dest),
+        ]
+    )
+
+
+def concat_segments(parts: list[Path], dest: Path) -> None:
+    listing = dest.with_suffix(".txt")
+    listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts))
+    run([*FFMPEG, "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(dest)])
+
+
+def build_voice_track(shots: list[tuple[Path | None, float]], dest: Path) -> None:
+    """依鏡頭順序把配音接起來，每段補靜音到該鏡頭的長度。"""
+    inputs: list[str] = []
+    labels = []
+    for i, (path, duration) in enumerate(shots):
+        if path is None:
+            inputs += ["-f", "lavfi", "-t", f"{duration:.3f}", "-i", f"anullsrc=r={AUDIO_RATE}:cl=stereo"]
+        else:
+            inputs += ["-i", str(path)]
+        labels.append(
+            f"[{i}:a]aresample={AUDIO_RATE},aformat=channel_layouts=stereo,apad,"
+            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[a{i}]"
+        )
+    graph = ";".join(labels) + ";" + "".join(f"[a{i}]" for i in range(len(shots))) + f"concat=n={len(shots)}:v=0:a=1[out]"
+    run([*FFMPEG, *inputs, "-filter_complex", graph, "-map", "[out]", "-c:a", "pcm_s16le", str(dest)])
+
+
+def _filter_path(path: Path) -> str:
+    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
+def compose_final(body: Path, voice: Path, subtitles: Path, dest: Path, *, ambience: float) -> None:
+    """燒入字幕、把環境音（素材原聲）壓低後和配音混在一起，輸出可直接上傳社媒的 mp4。"""
+    tmp = dest.with_suffix(".tmp.mp4")
+    graph = (
+        f"[0:v]ass=filename='{_filter_path(subtitles)}'[v];"
+        f"[0:a]volume={ambience:.2f}[bg];[1:a]volume=1.0[vo];"
+        "[bg][vo]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]"
+    )
+    run(
+        [
+            *FFMPEG, "-i", str(body), "-i", str(voice),
+            "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-profile:v", "high", "-r", str(OUT_FPS),
+            "-c:a", "aac", "-b:a", "192k", "-ar", str(AUDIO_RATE),
+            "-movflags", "+faststart", str(tmp),
+        ]
+    )
+    tmp.replace(dest)

@@ -577,3 +577,135 @@ body {
 .voice-bind {
   min-width: 150px;
 }
+
+/* ---------- 成片、作品庫 ---------- */
+.video-cover {
+  aspect-ratio: 9 / 16;
+}
+
+.works-tabs {
+  overflow-x: auto;
+}
+
+.editor-note {
+  margin: 12px 0 0 !important;
+}
+
+.video-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 767px) {
+  .video-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.video-player-col {
+  position: sticky;
+  top: 0;
+}
+
+@media (max-width: 767px) {
+  .video-player-col {
+    position: static;
+  }
+}
+
+.video-player {
+  aspect-ratio: 9 / 16;
+  max-height: 70vh;
+  margin: 0 auto;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-player video {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.video-player-empty {
+  color: #ccc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.video-actions {
+  margin-top: 12px;
+}
+
+.video-info-col {
+  min-width: 0;
+}
+
+.video-segments {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.video-segments .clip-thumb {
+  width: 64px;
+}
+
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.candidate {
+  border: 1px solid #e5e9f2;
+  border-radius: 10px;
+  padding: 0 0 6px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+}
+
+.candidate:hover {
+  border-color: #2f6bff;
+}
+
+.candidate img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+}
+
+.candidate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 6px 2px;
+}
+
+.candidate-desc {
+  padding: 0 6px;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.task-label {
+  max-width: 260px;
+}

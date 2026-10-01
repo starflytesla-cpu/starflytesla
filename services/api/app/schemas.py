@@ -223,3 +223,29 @@ class VoicePreviewIn(BaseModel):
     voice_id: str = Field(max_length=40)
     text: str = Field(min_length=1, max_length=1500)
     speed: float = Field(default=1.0, ge=0.7, le=1.2)
+
+
+# ---------------------------------------------------------------- 成片
+class RenderIn(BaseModel):
+    script_ids: Annotated[list[str], Field(min_length=1, max_length=20)]
+    per_script: int = Field(default=1, ge=1, le=5)
+    style: str = Field(default="random", max_length=20)
+    ambience: float = Field(default=0.12, ge=0, le=0.6)
+
+
+class CoverageIn(BaseModel):
+    script_ids: Annotated[list[str], Field(max_length=50)]
+
+
+class ReviewIn(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str = Field(default="", max_length=500)
+
+
+class ReplaceClipIn(BaseModel):
+    shot_index: int = Field(ge=0, le=50)
+    clip_id: str = Field(max_length=36)
+
+
+class RerenderIn(BaseModel):
+    reshuffle: bool = False
