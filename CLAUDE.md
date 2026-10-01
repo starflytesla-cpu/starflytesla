@@ -11,7 +11,7 @@
 
 - 目標平台：**海外**（TikTok / Instagram Reels / YouTube Shorts / Facebook Reels），發佈先接 Upload-Post API。
 - 商業模式：先自營服務自己的客戶，從**一個帳號群**開始；之後打包銷售或改積分制，所以每個 AI / 渲染 / 發佈動作都要記錄成本（`usage_ledger`）。
-- AI：文案用 DeepSeek，看圖打標籤用豆包 Seed Vision（BytePlus），配音用 kie.ai（ElevenLabs），備援用 OpenRouter。
+- AI：文案用 DeepSeek，看圖打標籤用 kie.ai 的 Gemini 3.8 Flash（使用者 2026-10-01 指定；豆包 Seed Vision 為備選），配音用 kie.ai（ElevenLabs），備援用 OpenRouter。
 - 成片和 AI 評論回覆**都要人工確認**後才發出。
 - 技術棧：FastAPI + PostgreSQL（pgvector）+ FFmpeg；前端 React + Vite + Ant Design（手機優先 PWA）；Caddy 提供網頁與 HTTPS；Docker Compose 部署在單台 VPS。不使用 Redis 與 MinIO（見 docs/02-architecture.md 開頭）。
 
@@ -27,7 +27,7 @@
 
 - `services/api/`：FastAPI。路由在 `app/routers/`，只處理輸入輸出；業務邏輯在 `app/services/`；資料表在 `app/models.py`，改資料表必須新增 Alembic 遷移（`alembic revision --autogenerate`）並用 `alembic check` 確認。
 - API 回應一律是 `{code, data, msg, reason}`：成功用 `schemas.ok()`；失敗丟 `app.errors` 的 `AppError`，HTTP status 要反映真實失敗，`msg` 是可直接顯示的繁體中文。
-- **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。
+- **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。kie.ai 的特殊處理也在這裡：網址是 `{base}/{model_key}/v1/chat/completions`、預設串流要關掉、圖片要先經 kie 檔案上傳 API 換成網址。
 - 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
 - 背景任務：`app/services/tasks.py` 的 `enqueue` 排入 `tasks` 表，`app/worker.py`（`worker` 容器）領取執行；新任務類型在 `HANDLERS` 註冊。FFmpeg 呼叫集中在 `app/services/media.py`。
 - 素材檔案在 `MEDIA_ROOT`（容器內 `/media`），網址 `/media/{tenant}/assets/{asset}/...` 由 Caddy 經 `/api/media/auth` 檢查權限後直接提供。場景分類代碼在 `asset_analyzer.SCENES`，前端 `SCENE_LABELS` 要同步。

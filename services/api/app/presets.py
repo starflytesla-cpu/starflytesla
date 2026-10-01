@@ -3,6 +3,7 @@
 價格來源（2026-09 查詢）：
 - DeepSeek：https://api-docs.deepseek.com/quick_start/pricing（採尖峰價，離峰為一半）
 - BytePlus ModelArk：價格依模型與區域而異，請到 BytePlus 控制台確認後在後台填入
+- kie.ai：以點數計費（https://kie.ai/pricing），換算成每百萬 token 價格後在後台填入
 """
 
 from decimal import Decimal
@@ -59,8 +60,15 @@ PRESETS: dict[str, dict] = {
     "kie": {
         "name": "kie.ai",
         "base_url": "https://api.kie.ai",
-        "api_key_help": "在 https://kie.ai 的 API Key 頁面建立；配音功能在 Phase 2 串接",
-        "models": [],
+        "api_key_help": "在 https://kie.ai 的 API Key 頁面建立。kie 的模型名稱就是網址路徑，例如 gemini-3-8-flash-openai",
+        "models": [
+            {
+                "model_key": "gemini-3-8-flash-openai",
+                "display_name": "Gemini 3.8 Flash",
+                "capability": "vision",
+                "is_default": True,
+            },
+        ],
     },
     "custom": {
         "name": "自訂（OpenAI 相容）",
