@@ -709,3 +709,20 @@ body {
 .task-label {
   max-width: 260px;
 }
+
+/* ---------- 背景音樂 ---------- */
+.music-progress {
+  margin-top: 12px;
+}
+
+.music-note {
+  margin-left: 12px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.full-height {
+  height: 100%;
+}

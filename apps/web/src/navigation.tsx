@@ -3,6 +3,7 @@ import {
   AppstoreOutlined,
   AudioOutlined,
   CommentOutlined,
+  CustomerServiceOutlined,
   DashboardOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
@@ -54,6 +55,13 @@ export const WORK_ITEMS: NavItem[] = [
     icon: <ScissorOutlined />,
     adminOnly: true,
     description: '選擇已核准的文案，自動挑素材、配音、上字幕並批量產生直式成片。',
+  },
+  {
+    path: '/music',
+    label: '背景音樂',
+    icon: <CustomerServiceOutlined />,
+    adminOnly: true,
+    description: '上傳或用 AI 產生背景音樂，成片時整支統一使用並自動避開人聲。',
   },
   {
     path: '/voices',

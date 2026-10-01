@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import AppError, bad_request, conflict, not_found
 from app.models import Asset, Clip, Script, User, Video, new_id, utcnow
-from app.services import ai_provider, media, renderer, tasks
+from app.services import ai_provider, media, music, renderer, tasks
 
 STATUSES = ("queued", "rendering", "pending_review", "approved", "rejected", "failed")
 BUSY = ("queued", "rendering")
@@ -97,6 +97,7 @@ def video_detail(db: Session, video: Video) -> dict:
         t += shot["duration"]
     data["shots"] = out_shots
     data["voice_id"] = timeline.get("voice_id")
+    data["bgm_title"] = (timeline.get("bgm") or {}).get("title")
     data["ambience"] = timeline.get("ambience", (video.options or {}).get("ambience"))
     return data
 
@@ -109,10 +110,19 @@ def check_ready(db: Session, tenant_id: str) -> None:
 
 
 def start_render(
-    db: Session, user: User, script_ids: list[str], per_script: int, style: str, ambience: float
+    db: Session,
+    user: User,
+    script_ids: list[str],
+    per_script: int,
+    style: str,
+    ambience: float,
+    bgm: str = "auto",
+    bgm_volume: float = music.DEFAULT_VOLUME,
 ) -> list[Video]:
     if style != "random" and style not in renderer.STYLES:
         raise bad_request("字幕樣式不正確", "invalid_style")
+    if bgm not in ("auto", "none"):
+        music.get_track(db, user, bgm)
     scripts = db.scalars(select(Script).where(Script.id.in_(script_ids), Script.tenant_id == user.tenant_id)).all()
     if len(scripts) != len(set(script_ids)):
         raise not_found("有文案不存在", "script_not_found")
@@ -135,7 +145,13 @@ def start_render(
                 language=script.language,
                 status="queued",
                 stage="排隊中",
-                options={"style": style, "ambience": ambience, "seed": random.randrange(1, 2**31)},
+                options={
+                    "style": style,
+                    "ambience": ambience,
+                    "bgm": bgm,
+                    "bgm_volume": bgm_volume,
+                    "seed": random.randrange(1, 2**31),
+                },
                 created_by=user.id,
             )
             db.add(video)
@@ -221,7 +237,9 @@ def replace_clip(db: Session, video: Video, shot_index: int, clip_id: str) -> No
     shots = [dict(s) for s in timeline.get("shots", [])]
     if not 0 <= shot_index < len(shots):
         raise bad_request("鏡頭編號不正確", "invalid_shot")
-    shots[shot_index]["segments"] = renderer.segment_for_clip(db, video.tenant_id, clip_id, shots[shot_index]["duration"])
+    shot = shots[shot_index]
+    need = shot.get("frames") or media.frames(shot["duration"])
+    shot["segments"] = renderer.segment_for_clip(db, video.tenant_id, clip_id, shot, need)
     timeline["shots"] = shots
     video.timeline = timeline  # 重新指定整個 JSON，SQLAlchemy 才會偵測到變更
     _queue(db, video, "rerender")

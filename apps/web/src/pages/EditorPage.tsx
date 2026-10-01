@@ -11,6 +11,8 @@ interface Options {
   per_script: number
   style: string
   ambience: number
+  bgm: string
+  bgm_volume: number
 }
 
 export default function EditorPage() {
@@ -25,6 +27,9 @@ export default function EditorPage() {
     queryFn: () => api.scripts({ status: 'approved', limit: 100, offset: 0 }),
   })
   const { data: styles } = useQuery({ queryKey: ['video-styles'], queryFn: api.videoStyles, staleTime: Infinity })
+  const { data: musicData } = useQuery({ queryKey: ['music'], queryFn: api.music })
+  const readyMusic = (musicData?.items ?? []).filter((t) => t.status === 'ready')
+  const bgm = Form.useWatch('bgm', form) ?? 'auto'
   const { data: coverage } = useQuery({
     queryKey: ['coverage', selected],
     queryFn: () => api.videoCoverage(selected),
@@ -132,7 +137,7 @@ export default function EditorPage() {
             <Form
               form={form}
               layout="vertical"
-              initialValues={{ per_script: 2, style: 'random', ambience: 0.12 }}
+              initialValues={{ per_script: 2, style: 'random', ambience: 0, bgm: 'auto', bgm_volume: 0.22 }}
               onFinish={(values) => generate.mutate(values)}
             >
               <Form.Item name="per_script" label="每份文案產生幾支" extra="同一份文案的多支成片，會挑不同素材、字幕樣式，適合分給不同帳號">
@@ -146,8 +151,38 @@ export default function EditorPage() {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="ambience" label="素材原聲音量" extra="保留一點機台、現場的聲音更有真實感；0 代表只有配音">
-                <Slider min={0} max={0.5} step={0.02} marks={{ 0: '靜音', 0.12: '建議', 0.5: '大' }} />
+              <Form.Item
+                name="bgm"
+                label="背景音樂"
+                extra={
+                  readyMusic.length === 0 ? (
+                    <span>
+                      音樂庫是空的，成片會沒有背景音樂。<a onClick={() => navigate('/music')}>前往新增音樂</a>
+                    </span>
+                  ) : (
+                    '整支成片使用同一首，配音時自動壓低'
+                  )
+                }
+              >
+                <Select
+                  options={[
+                    { value: 'auto', label: '每支自動隨機（建議）' },
+                    { value: 'none', label: '不使用背景音樂' },
+                    ...readyMusic.map((t) => ({ value: t.id, label: `固定：${t.title}` })),
+                  ]}
+                />
+              </Form.Item>
+              {bgm !== 'none' ? (
+                <Form.Item name="bgm_volume" label="背景音樂音量">
+                  <Slider min={0.05} max={0.5} step={0.01} marks={{ 0.05: '小', 0.22: '建議', 0.5: '大' }} />
+                </Form.Item>
+              ) : null}
+              <Form.Item
+                name="ambience"
+                label="素材現場原聲"
+                extra="各段影片的現場聲音大小不一，建議保持 0；想保留一點機台聲可以調到 0.05～0.1"
+              >
+                <Slider min={0} max={0.3} step={0.01} marks={{ 0: '關閉', 0.1: '小', 0.3: '大' }} />
               </Form.Item>
               <Button
                 type="primary"

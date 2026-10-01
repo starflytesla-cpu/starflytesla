@@ -169,6 +169,7 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
                   {video.render_seconds ? `（渲染 ${Math.round(video.render_seconds)} 秒）` : ''}
                 </Descriptions.Item>
               ) : null}
+              <Descriptions.Item label="背景音樂">{video.bgm_title || '無'}</Descriptions.Item>
               <Descriptions.Item label="建立">{dayjs(video.created_at).format('MM/DD HH:mm')}</Descriptions.Item>
             </Descriptions>
 

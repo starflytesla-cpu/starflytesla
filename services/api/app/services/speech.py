@@ -144,14 +144,20 @@ def cached_tts(
     *,
     source: str,
 ) -> tuple[str, float]:
-    """成片配音：回傳 (相對 MEDIA_ROOT 的路徑, 秒數)。同樣的模型、音色、語速、語氣、文字只產生一次。"""
+    """成片配音：回傳 (整理後 WAV 相對 MEDIA_ROOT 的路徑, 秒數)。同樣的模型、音色、語速、語氣、文字只產生一次。
+
+    整理：去掉頭尾靜音、統一音量（media.clean_voice），鏡頭之間的停頓才會一致、音量不忽大忽小。
+    """
     raw = f"{model.model_key}|{voice_id}|{speed:.2f}|{style}|{text}"
     base = media.media_root() / tenant_id / "tts-cache" / hashlib.sha256(raw.encode()).hexdigest()[:40]
-    path = _find(base)
-    if path is None:
-        result = ai_provider.tts(db, model, text, voice_id, speed=speed, style=style, source=source, user=user)
-        path = _write(base, result)
-    return str(path.relative_to(media.media_root())), media.audio_duration(path)
+    clean = base.with_name(base.name + ".clean.wav")
+    if not clean.exists():
+        path = _find(base)
+        if path is None:
+            result = ai_provider.tts(db, model, text, voice_id, speed=speed, style=style, source=source, user=user)
+            path = _write(base, result)
+        media.clean_voice(path, clean)
+    return str(clean.relative_to(media.media_root())), media.audio_duration(clean)
 
 
 def cleanup_previews() -> int:

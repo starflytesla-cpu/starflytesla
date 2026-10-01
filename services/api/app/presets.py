@@ -12,6 +12,7 @@ CAPABILITIES = {
     "text": "文字（文案、翻譯、評論）",
     "vision": "看圖（素材打標籤）",
     "tts": "配音",
+    "music": "背景音樂",
     "embedding": "向量（素材檢索）",
 }
 
@@ -83,6 +84,12 @@ PRESETS: dict[str, dict] = {
                 "model_key": "elevenlabs/text-to-speech-multilingual-v2",
                 "display_name": "ElevenLabs Multilingual v2",
                 "capability": "tts",
+            },
+            {
+                "model_key": "ai-music-api/generate",
+                "display_name": "Suno 背景音樂",
+                "capability": "music",
+                "is_default": True,
             },
             {
                 "model_key": "elevenlabs/text-to-speech-turbo-2-5",

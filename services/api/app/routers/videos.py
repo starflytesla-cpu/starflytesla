@@ -36,7 +36,9 @@ def coverage(body: CoverageIn, admin: AdminUser, db: DB):
 
 @router.post("/generate")
 def generate(body: RenderIn, admin: AdminUser, db: DB):
-    created = videos.start_render(db, admin, body.script_ids, body.per_script, body.style, body.ambience)
+    created = videos.start_render(
+        db, admin, body.script_ids, body.per_script, body.style, body.ambience, body.bgm, body.bgm_volume
+    )
     return ok([videos.video_out(v) for v in created], f"已排入 {len(created)} 支成片，每支約 1～3 分鐘")
 
 

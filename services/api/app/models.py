@@ -157,6 +157,8 @@ class Upload(Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     offset_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # asset：素材（影片 / 照片）；music：背景音樂
+    purpose: Mapped[str] = mapped_column(String(16), default="asset", server_default="asset")
     asset_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -409,3 +411,30 @@ class Video(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
     rendered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MusicTrack(Base):
+    """背景音樂：使用者上傳，或用 AI（kie.ai Suno）產生的純音樂。成片時整支使用同一首，配音時自動壓低。
+
+    status：generating 產生中 / ready 可用 / failed 失敗
+    """
+
+    __tablename__ = "music_tracks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    # upload / ai
+    source: Mapped[str] = mapped_column(String(16), default="upload")
+    # AI 產生時使用的風格描述
+    style: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(16), default="ready", index=True)
+    error: Mapped[str] = mapped_column(String(500), default="")
+    # MEDIA_ROOT 底下的相對路徑，例如 {tenant}/music/{id}.mp3
+    storage_key: Mapped[str] = mapped_column(String(500), default="")
+    duration: Mapped[float | None] = mapped_column(Float)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    # 停用後「自動挑選」不會選到
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

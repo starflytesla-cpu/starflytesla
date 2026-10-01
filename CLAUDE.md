@@ -31,7 +31,7 @@
 - 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
 - 背景任務：`app/services/tasks.py` 的 `enqueue` 排入 `tasks` 表，`app/worker.py`（`worker` 容器）領取執行；新任務類型在 `HANDLERS` 註冊。FFmpeg 呼叫集中在 `app/services/media.py`。
 - 文案：`script_writer.py`（worker 任務 `script.generate`）組 prompt 與解析；內建模板在 `template_library.py`（改完重新部署即同步）；音色清單在 `voices.py`（Gemini 與 ElevenLabs 兩種引擎，`resolve_voice` 依配音模型換成可用音色）；試聽、音色樣本、成片配音快取都在 `speech.py`（`ai_provider.tts`）。
-- 成片：`renderer.py`（worker 任務 `video.render`）負責挑素材、配音快取、ASS 字幕與渲染；API 邏輯在 `videos.py`；任務中心在 `task_center.py`。渲染用的 FFmpeg 指令同樣集中在 `media.py`。
+- 成片：`renderer.py`（worker 任務 `video.render`）負責挑素材、配音快取、ASS 字幕與渲染；長度一律以影格（30fps）計算，片段只輸出影像、聲音另做無損 WAV，最後由 `media.compose_final` 一次合成（不要再用 concat demuxer 串接含 AAC 的片段，會卡頓）；背景音樂在 `music.py`（上傳 / kie Suno 產生、`pick_for_video`）；API 邏輯在 `videos.py`；任務中心在 `task_center.py`。渲染用的 FFmpeg 指令同樣集中在 `media.py`。
 - 素材檔案在 `MEDIA_ROOT`（容器內 `/media`），網址 `/media/{tenant}/assets|videos/{id}/...` 與 `/media/{tenant}/tts/...` 由 Caddy 經 `/api/media/auth` 檢查權限後直接提供。場景分類代碼在 `asset_analyzer.SCENES`，前端 `SCENE_LABELS` 要同步。
 - `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫（唯一例外：上傳用 `src/api/upload.ts` 的 tus-js-client）；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
 - 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫與 ffmpeg）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
@@ -93,5 +93,5 @@
 - [x] Phase 2 程式完成（2026-10-01）：帳號檔案、14 個內建模板、DeepSeek 多版本文案、ElevenLabs 音色試聽與綁定
 - [ ] Phase 2 驗收：使用者用真實 DeepSeek 產生文案、試聽 kie.ai 配音
 - [x] Phase 3 程式完成（2026-10-01）：自動挑素材、逐鏡頭配音（快取）、ASS 字幕、1080×1920 成片、作品庫審核與換素材、任務中心
-- [ ] Phase 3 驗收：用真實素材與文案產生成片並審核
+- [ ] Phase 3 驗收：用真實素材與文案產生成片並審核（2026-10-01 使用者回報背景聲不一致與卡頓，已改為統一背景音樂與影格精確渲染，待重新驗收）
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP

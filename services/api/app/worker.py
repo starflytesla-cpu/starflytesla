@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_sessionmaker
 from app.models import Task, Upload, utcnow
-from app.services import asset_analyzer, media, renderer, script_writer, speech, tasks
+from app.services import asset_analyzer, media, music, renderer, script_writer, speech, tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("starfly.worker")
@@ -33,6 +33,7 @@ HANDLERS: dict[str, Callable[[Session, Task], dict]] = {
     asset_analyzer.TASK_TYPE: asset_analyzer.analyze_task,
     script_writer.TASK_TYPE: script_writer.generate_task,
     renderer.TASK_TYPE: renderer.render_task,
+    music.TASK_TYPE: music.generate_task,
 }
 
 

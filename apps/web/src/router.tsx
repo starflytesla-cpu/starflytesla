@@ -12,6 +12,7 @@ import ProfilesPage from './pages/ProfilesPage'
 import TemplatesPage from './pages/templates/TemplatesPage'
 import VoicesPage from './pages/VoicesPage'
 import EditorPage from './pages/EditorPage'
+import MusicPage from './pages/MusicPage'
 import TasksPage from './pages/TasksPage'
 import WorksPage from './pages/works/WorksPage'
 import UsersPage from './pages/UsersPage'
@@ -76,6 +77,14 @@ export const router = createBrowserRouter([
         element: (
           <AdminOnly>
             <TasksPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'music',
+        element: (
+          <AdminOnly>
+            <MusicPage />
           </AdminOnly>
         ),
       },

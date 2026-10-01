@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import AppError
 from app.models import Asset, BrandProfile, Clip, Script, Task, UsageLedger, User, Video, utcnow
-from app.services import ai_provider, media, speech
+from app.services import ai_provider, media, music, speech
 from app.services.tasks import will_retry
 
 log = logging.getLogger("starfly.renderer")
@@ -139,68 +139,84 @@ def _score(clip: dict, scene: str, keywords: set[str], usage: Counter, rng: rand
     return score + rng.random() * 1.5
 
 
+# 素材比需要的短一點（例如差 20% 以內）時放慢播放補足，不要停格；再短就接下一段素材
+MAX_SLOWDOWN = 1.25
+MIN_SEGMENT_FRAMES = 9  # 0.3 秒以下的片段不用（太短看起來像閃爍）
+
+
+def _segment(clip: dict, frame_count: int, start: float, src_duration: float, zoom: float) -> dict:
+    return {
+        "clip_id": clip["clip_id"],
+        "asset_id": clip["asset_id"],
+        "kind": clip["kind"],
+        "source": clip["source"],
+        "has_audio": clip["has_audio"],
+        "start": round(start, 3),
+        "frames": frame_count,
+        "duration": round(frame_count / media.OUT_FPS, 3),
+        "src_duration": round(src_duration, 3),
+        "zoom": zoom,
+    }
+
+
 def choose_segments(
-    pool: list[dict], shot: dict, need: float, used: set[str], usage: Counter, rng: random.Random
+    pool: list[dict], shot: dict, need_frames: int, used: set[str], usage: Counter, rng: random.Random,
+    *, first: dict | None = None,
 ) -> list[dict]:
-    """為一個鏡頭挑素材片段，總長度 = need 秒。優先挑沒用過、場景相符、品質好的片段。"""
+    """為一個鏡頭挑素材片段，總格數剛好 = need_frames。
+
+    優先挑沒用過、場景相符、品質好的片段；素材稍短就放慢，太短就接下一段；
+    素材都用過了才重複使用（不同起點），任何情況都不會停格補時間。first：人工指定的第一段素材。
+    """
     scene = shot.get("scene", "")
     keywords = _keywords(shot)
-    candidates = [c for c in pool if c["clip_id"] not in used] or list(pool)
+    in_shot: set[str] = set()
     segments: list[dict] = []
-    remaining = need
-    while remaining > 0.05 and candidates and len(segments) < MAX_SEGMENTS_PER_SHOT:
-        candidates.sort(key=lambda c: _score(c, scene, keywords, usage, rng), reverse=True)
-        clip = candidates.pop(0)
-        used.add(clip["clip_id"])
-        if clip["kind"] == "image" or clip["length"] is None:
-            length, start = remaining, 0.0
+    remaining = need_frames
+    while remaining > 0 and len(segments) < MAX_SEGMENTS_PER_SHOT + 2:
+        if first is not None and not segments:
+            clip = first
         else:
-            length = min(remaining, clip["length"])
-            # 片段比需要的長時，隨機挑起點
-            slack = clip["length"] - length
+            candidates = [c for c in pool if c["clip_id"] not in used and c["clip_id"] not in in_shot]
+            if not candidates:
+                # 全部素材都用過：允許重複使用，但不在同一個鏡頭內重複
+                candidates = [c for c in pool if c["clip_id"] not in in_shot] or list(pool)
+            clip = max(candidates, key=lambda c: _score(c, scene, keywords, usage, rng))
+        used.add(clip["clip_id"])
+        in_shot.add(clip["clip_id"])
+        zoom = round(rng.uniform(1.0, 1.06), 3)
+        if clip["kind"] == "image" or clip["length"] is None:
+            segments.append(_segment(clip, remaining, 0.0, remaining / media.OUT_FPS, zoom))
+            break
+        available = int(clip["length"] * media.OUT_FPS)
+        last_chance = len(segments) >= MAX_SEGMENTS_PER_SHOT - 1
+        if available >= remaining:
+            slack = clip["length"] - remaining / media.OUT_FPS
             start = clip["start"] + (rng.uniform(0, slack) if slack > 0.1 else 0.0)
-        if length < 0.3 and segments:
+            segments.append(_segment(clip, remaining, start, remaining / media.OUT_FPS, zoom))
+            break
+        if available * MAX_SLOWDOWN >= remaining or (last_chance and available >= MIN_SEGMENT_FRAMES):
+            # 稍短（或已經接了很多段）：整段放慢補足
+            segments.append(_segment(clip, remaining, clip["start"], clip["length"], zoom))
+            break
+        if available < MIN_SEGMENT_FRAMES:
             continue
-        segments.append(
-            {
-                "clip_id": clip["clip_id"],
-                "asset_id": clip["asset_id"],
-                "kind": clip["kind"],
-                "source": clip["source"],
-                "has_audio": clip["has_audio"],
-                "start": round(start, 3),
-                "duration": round(length, 3),
-                "zoom": round(rng.uniform(1.0, 1.06), 3),
-            }
-        )
-        remaining -= length
-    if remaining > 0.05 and segments:
-        # 素材都太短：把最後一段延長（影片會停在最後一格前補足；照片沒有影響）
-        segments[-1]["duration"] = round(segments[-1]["duration"] + remaining, 3)
+        segments.append(_segment(clip, available, clip["start"], available / media.OUT_FPS, zoom))
+        remaining -= available
     return segments
 
 
-def segment_for_clip(db: Session, tenant_id: str, clip_id: str, need: float) -> list[dict]:
-    """人工換素材：用指定的鏡頭填滿這個鏡頭的長度（素材太短時停在最後一格補足）。"""
-    pool = [c for c in load_pool(db, tenant_id) if c["clip_id"] == clip_id]
-    if not pool:
+def segment_for_clip(
+    db: Session, tenant_id: str, clip_id: str, shot: dict, need_frames: int, rng: random.Random | None = None
+) -> list[dict]:
+    """人工換素材：指定的鏡頭排第一段，太短時自動接其他素材補足（不停格）。"""
+    pool = load_pool(db, tenant_id)
+    chosen = next((c for c in pool if c["clip_id"] == clip_id), None)
+    if chosen is None:
         raise AppError(400, "clip_unavailable", "這個素材鏡頭無法使用（可能已停用或刪除）")
-    clip = pool[0]
-    return [
-        {
-            "clip_id": clip["clip_id"],
-            "asset_id": clip["asset_id"],
-            "kind": clip["kind"],
-            "source": clip["source"],
-            "has_audio": clip["has_audio"],
-            "start": clip["start"],
-            "duration": round(need, 3),
-            "zoom": 1.0,
-        }
-    ]
+    return choose_segments(pool, shot, need_frames, set(), Counter(), rng or random.Random(), first=chosen)
 
 
-# ---------------------------------------------------------------- 時間軸
 def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfile | None) -> dict:
     options = video.options or {}
     rng = random.Random(options.get("seed") or video.id)
@@ -225,7 +241,8 @@ def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfi
             audio, voice_len = speech.cached_tts(
                 db, creator, tts_model, video.tenant_id, text, voice_id, speed, voice_style, source="video_render"
             )
-        duration = round(max(voice_len + VOICE_PAD, MIN_SHOT) if text else float(shot.get("seconds") or 3), 3)
+        seconds = max(voice_len + VOICE_PAD, MIN_SHOT) if text else float(shot.get("seconds") or 3)
+        frame_count = media.frames(seconds)
         shots.append(
             {
                 "index": i,
@@ -235,14 +252,15 @@ def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfi
                 "voiceover": text,
                 "audio": audio,
                 "voice_duration": round(voice_len, 3),
-                "duration": duration,
+                "frames": frame_count,
+                "duration": round(frame_count / media.OUT_FPS, 3),
             }
         )
 
     _set_stage(db, video, "挑選素材")
     used: set[str] = set()
     for shot in shots:
-        shot["segments"] = choose_segments(pool, shot, shot["duration"], used, usage, rng)
+        shot["segments"] = choose_segments(pool, shot, shot["frames"], used, usage, rng)
     return {
         "width": media.OUT_W,
         "height": media.OUT_H,
@@ -252,7 +270,8 @@ def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfi
         "voice_id": voice_id,
         "voice_speed": speed,
         "style": style,
-        "ambience": float(options.get("ambience", 0.12)),
+        "ambience": float(options.get("ambience", 0.0)),
+        "bgm": music.pick_for_video(db, video.tenant_id, options, rng),
         "shots": shots,
     }
 
@@ -342,41 +361,79 @@ def build_ass(timeline: dict) -> str:
 
 
 # ---------------------------------------------------------------- 渲染
+def _shot_frames(shot: dict) -> int:
+    return shot.get("frames") or media.frames(shot["duration"])
+
+
+def _seg_frames(seg: dict) -> int:
+    return seg.get("frames") or media.frames(seg["duration"])
+
+
 def render_timeline(db: Session, video: Video, timeline: dict) -> float:
-    """依時間軸輸出 final.mp4 與 poster.jpg，回傳成片秒數。"""
+    """依時間軸輸出 final.mp4 與 poster.jpg，回傳成片秒數。
+
+    每段素材輸出純影像（格數精確）＋需要時的無損原聲，最後一次合成，避免接縫誤差造成卡頓。
+    """
     root = media.media_root()
     out_dir = video_dir(video.tenant_id, video.id)
     work = out_dir / "work"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     try:
+        ambience_volume = float(timeline.get("ambience", 0.0))
         parts: list[Path] = []
-        segments = [seg for shot in timeline["shots"] for seg in shot["segments"]]
-        for n, seg in enumerate(segments, 1):
-            _set_stage(db, video, f"處理素材片段 {n}/{len(segments)}")
-            src = root / seg["source"]
-            if not src.exists():
-                raise RenderError("有素材的原始檔已被刪除，請按「重新挑素材」", retryable=False)
-            part = work / f"seg_{n:03d}.mp4"
-            media.render_segment(
-                src, part, kind=seg["kind"], start=seg["start"], duration=seg["duration"],
-                zoom=seg.get("zoom", 1.0), has_audio=seg.get("has_audio", False),
-            )
-            parts.append(part)
+        sounds: list[Path] = []
+        for shot in timeline["shots"]:
+            # 舊版時間軸沒有格數時，最後一段補齊到鏡頭長度
+            segs = shot["segments"]
+            counts = [_seg_frames(seg) for seg in segs]
+            if segs:
+                counts[-1] = max(1, _shot_frames(shot) - sum(counts[:-1]))
+            for seg, count in zip(segs, counts):
+                n = len(parts) + 1
+                _set_stage(db, video, f"處理素材片段 {n}")
+                src = root / seg["source"]
+                if not src.exists():
+                    raise RenderError("有素材的原始檔已被刪除，請按「重新挑素材」", retryable=False)
+                src_duration = seg.get("src_duration") or seg["duration"]
+                part = work / f"seg_{n:03d}.mp4"
+                media.render_segment(
+                    src, part, kind=seg["kind"], start=seg["start"], frame_count=count,
+                    src_duration=src_duration, zoom=seg.get("zoom", 1.0),
+                )
+                parts.append(part)
+                if ambience_volume > 0:
+                    sound = work / f"amb_{n:03d}.wav"
+                    has_audio = seg.get("has_audio") and seg["kind"] == "video"
+                    media.render_segment_audio(
+                        src if has_audio else None, sound, start=seg["start"], frame_count=count, src_duration=src_duration
+                    )
+                    sounds.append(sound)
 
-        _set_stage(db, video, "合成字幕與配音")
-        body = work / "body.mp4"
-        media.concat_segments(parts, body)
+        _set_stage(db, video, "合成字幕、配音與背景音樂")
+        total_frames = sum(_shot_frames(s) for s in timeline["shots"])
         voice = work / "voice.wav"
         media.build_voice_track(
-            [((root / s["audio"]) if s.get("audio") else None, s["duration"]) for s in timeline["shots"]], voice
+            [((root / s["audio"]) if s.get("audio") else None, _shot_frames(s)) for s in timeline["shots"]], voice
         )
+        ambience = None
+        if sounds:
+            ambience = work / "ambience.wav"
+            media.concat_audio(sounds, ambience)
+        bgm = timeline.get("bgm") or {}
+        bgm_path = root / bgm["source"] if bgm.get("source") else None
+        if bgm_path is not None and not bgm_path.exists():
+            bgm_path = None  # 背景音樂已被刪除：不加音樂，不讓整支失敗
         subtitles = work / "subtitles.ass"
         subtitles.write_text(build_ass(timeline), encoding="utf-8")
         final = out_dir / "final.mp4"
-        media.compose_final(body, voice, subtitles, final, ambience=timeline.get("ambience", 0.12))
+        media.compose_final(
+            parts, voice, subtitles, final, total_frames=total_frames,
+            ambience=ambience, ambience_volume=ambience_volume,
+            bgm=bgm_path, bgm_volume=float(bgm.get("volume", 0.0)),
+        )
         media.extract_frame(final, out_dir / "poster.jpg", at=min(1.0, timeline["shots"][0]["duration"] / 2), long_side=1280)
-        return round(sum(s["duration"] for s in timeline["shots"]), 3)
+        return round(total_frames / media.OUT_FPS, 3)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

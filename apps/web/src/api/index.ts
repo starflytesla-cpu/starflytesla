@@ -1,7 +1,7 @@
 import { http } from './http'
 
 export type Role = 'admin' | 'shooter'
-export type Capability = 'text' | 'vision' | 'tts' | 'embedding'
+export type Capability = 'text' | 'vision' | 'tts' | 'music' | 'embedding'
 export type Provider = 'deepseek' | 'byteplus' | 'openrouter' | 'kie' | 'custom'
 
 export interface User {
@@ -318,6 +318,7 @@ export interface VideoShot {
 
 export interface VideoDetail extends Video {
   shots: VideoShot[]
+  bgm_title: string | null
   voice_id: string | null
   ambience: number | null
 }
@@ -332,6 +333,20 @@ export interface ClipCandidate {
   scene: string
   description: string
   filename: string
+}
+
+export interface MusicTrack {
+  id: string
+  title: string
+  source: 'upload' | 'ai'
+  style: string
+  status: 'generating' | 'ready' | 'failed'
+  error: string
+  duration: number | null
+  size_bytes: number
+  is_active: boolean
+  audio_url: string | null
+  created_at: string
 }
 
 export interface Coverage {
@@ -453,7 +468,14 @@ export const api = {
   videoStats: () => http.get<Record<VideoStatus, number>>('/videos/stats'),
   videoStyles: () => http.get<Record<string, string>>('/videos/styles'),
   videoCoverage: (script_ids: string[]) => http.post<Coverage>('/videos/coverage', { script_ids }),
-  generateVideos: (body: { script_ids: string[]; per_script: number; style: string; ambience: number }) =>
+  generateVideos: (body: {
+    script_ids: string[]
+    per_script: number
+    style: string
+    ambience: number
+    bgm: string
+    bgm_volume: number
+  }) =>
     http.post<Video[]>('/videos/generate', body),
   video: (id: string) => http.get<VideoDetail>(`/videos/${id}`),
   reviewVideo: (id: string, action: 'approve' | 'reject', note = '') =>
@@ -463,6 +485,11 @@ export const api = {
     http.post<VideoDetail>(`/videos/${id}/replace`, { shot_index, clip_id }),
   rerenderVideo: (id: string, reshuffle: boolean) => http.post<VideoDetail>(`/videos/${id}/rerender`, { reshuffle }),
   deleteVideo: (id: string) => http.delete<null>(`/videos/${id}`),
+
+  music: () => http.get<{ items: MusicTrack[]; presets: string[] }>('/music'),
+  generateMusic: (body: { preset: string; extra?: string; title?: string }) => http.post<MusicTrack>('/music/generate', body),
+  updateMusic: (id: string, body: Partial<{ title: string; is_active: boolean }>) => http.patch<MusicTrack>(`/music/${id}`, body),
+  deleteMusic: (id: string) => http.delete<null>(`/music/${id}`),
 
   tasks: (params: { limit: number; offset: number; status?: TaskStatus; type?: string }) =>
     http.get<{ items: TaskItem[]; total: number; counts: Partial<Record<TaskStatus, number>>; types: Record<string, string> }>(
@@ -491,7 +518,17 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   text: '文字',
   vision: '看圖',
   tts: '配音',
+  music: '背景音樂',
   embedding: '向量',
+}
+
+/** 背景音樂 AI 產生的風格；與後端 app/services/music.py 的 STYLE_PRESETS 同步 */
+export const MUSIC_PRESETS: Record<string, string> = {
+  corporate: '企業形象（輕快、正面）',
+  industrial: '工業節奏（電子、有力）',
+  inspiring: '激勵感人（鋼琴、弦樂）',
+  chill: '輕鬆 Lo-fi',
+  energetic: '活潑流行（適合短影音）',
 }
 
 export const STRATEGY_LABELS: Record<Strategy, { label: string; color: string }> = {

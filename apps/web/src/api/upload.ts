@@ -29,13 +29,14 @@ function errorMessage(error: Error | tus.DetailedError): string {
   return '網路中斷，上傳失敗，請稍後按「重試」'
 }
 
-export function createUpload(file: File, callbacks: UploadCallbacks): tus.Upload {
+/** purpose：asset 素材（預設）／ music 背景音樂 */
+export function createUpload(file: File, callbacks: UploadCallbacks, purpose: 'asset' | 'music' = 'asset'): tus.Upload {
   return new tus.Upload(file, {
     endpoint: '/api/uploads',
     chunkSize: CHUNK_SIZE,
     retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000],
     removeFingerprintOnSuccess: true,
-    metadata: { filename: file.name, filetype: file.type },
+    metadata: { filename: file.name, filetype: file.type, purpose },
     onProgress: callbacks.onProgress,
     onSuccess: ({ lastResponse }) => callbacks.onSuccess(lastResponse.getHeader('Starfly-Asset-Id') ?? null),
     onError: (error) => callbacks.onError(errorMessage(error)),

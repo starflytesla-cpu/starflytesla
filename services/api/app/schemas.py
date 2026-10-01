@@ -8,7 +8,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from app.models import ChannelModel, ModelChannel, User
 
 Role = Literal["admin", "shooter"]
-Capability = Literal["text", "vision", "tts", "embedding"]
+Capability = Literal["text", "vision", "tts", "music", "embedding"]
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -230,7 +230,11 @@ class RenderIn(BaseModel):
     script_ids: Annotated[list[str], Field(min_length=1, max_length=20)]
     per_script: int = Field(default=1, ge=1, le=5)
     style: str = Field(default="random", max_length=20)
-    ambience: float = Field(default=0.12, ge=0, le=0.6)
+    # 素材現場原聲音量；預設 0（各片段原聲不一致，改用統一的背景音樂）
+    ambience: float = Field(default=0.0, ge=0, le=0.6)
+    # 背景音樂：auto 每支隨機挑一首、none 不用、或指定音樂 ID
+    bgm: str = Field(default="auto", max_length=36)
+    bgm_volume: float = Field(default=0.22, ge=0, le=0.6)
 
 
 class CoverageIn(BaseModel):
@@ -249,3 +253,15 @@ class ReplaceClipIn(BaseModel):
 
 class RerenderIn(BaseModel):
     reshuffle: bool = False
+
+
+# ---------------------------------------------------------------- 背景音樂
+class MusicGenerateIn(BaseModel):
+    preset: str = Field(max_length=32)
+    extra: str = Field(default="", max_length=300)
+    title: str = Field(default="", max_length=120)
+
+
+class MusicUpdateIn(BaseModel):
+    title: str | None = Field(default=None, max_length=120)
+    is_active: bool | None = None

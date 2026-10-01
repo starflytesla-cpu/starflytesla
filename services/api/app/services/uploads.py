@@ -19,7 +19,7 @@ from starlette.requests import ClientDisconnect
 from app.config import get_settings
 from app.errors import AppError, bad_request, conflict, not_found
 from app.models import Asset, Upload, User, new_id
-from app.services import asset_analyzer, media, tasks
+from app.services import asset_analyzer, media, music, tasks
 
 
 def parse_metadata(header: str) -> dict[str, str]:
@@ -55,8 +55,19 @@ def create_upload(db: Session, user: User, length: int, metadata: dict[str, str]
     settings = get_settings()
     filename = clean_filename(metadata.get("filename") or metadata.get("name") or "")
     ext = os.path.splitext(filename)[1].lower()
-    if media.kind_for_extension(ext) is None:
-        raise AppError(415, "unsupported_type", f"不支援這種檔案格式（{ext or '無副檔名'}），請上傳影片或照片")
+    purpose = metadata.get("purpose") or "asset"
+    if purpose == "music":
+        if user.role != "admin":
+            raise AppError(403, "forbidden", "只有管理員可以上傳背景音樂")
+        if ext not in music.EXTENSIONS:
+            raise AppError(415, "unsupported_type", f"不支援這種音樂格式（{ext or '無副檔名'}），請上傳 mp3、m4a、wav")
+        if length > music.MAX_UPLOAD_BYTES:
+            raise AppError(413, "too_large", "音樂檔太大，上限 50 MB")
+    elif purpose == "asset":
+        if media.kind_for_extension(ext) is None:
+            raise AppError(415, "unsupported_type", f"不支援這種檔案格式（{ext or '無副檔名'}），請上傳影片或照片")
+    else:
+        raise bad_request("上傳用途不正確", "invalid_purpose")
     if length <= 0:
         raise bad_request("檔案是空的", "empty_file")
     if length > settings.max_upload_bytes:
@@ -72,6 +83,7 @@ def create_upload(db: Session, user: User, length: int, metadata: dict[str, str]
         filename=filename,
         content_type=(metadata.get("filetype") or "")[:100],
         size_bytes=length,
+        purpose=purpose,
     )
     media.uploads_dir().mkdir(parents=True, exist_ok=True)
     part_path(upload.id).touch()
@@ -119,9 +131,15 @@ async def append(upload: Upload, offset: int, chunks: AsyncIterator[bytes]) -> i
 
 
 def finalize(db: Session, upload: Upload, offset: int) -> Asset | None:
-    """記錄進度；檔案傳完時搬到素材目錄、建立 Asset 並排入分析任務。"""
+    """記錄進度；檔案傳完時搬到素材目錄、建立 Asset 並排入分析任務（背景音樂則直接加入音樂庫）。"""
     upload.offset_bytes = offset
     if offset < upload.size_bytes:
+        db.commit()
+        return None
+    if upload.purpose == "music":
+        track = music.register_upload(db, upload, part_path(upload.id))
+        upload.completed = True
+        upload.asset_id = track.id
         db.commit()
         return None
     ext = os.path.splitext(upload.filename)[1].lower()

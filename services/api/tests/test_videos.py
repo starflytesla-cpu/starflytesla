@@ -96,15 +96,27 @@ def test_render_end_to_end(admin, db, studio, voice_mp3):
     assert detail["status"] == "pending_review", detail
     assert detail["video_url"].startswith(f"/media/") and detail["poster_url"]
     assert len(detail["shots"]) == shots
+    # 配音（1.2 秒的音）去掉頭尾靜音後 + 停頓，再取整到影格
     expected = sum(max(1.2 + renderer.VOICE_PAD, renderer.MIN_SHOT) for _ in range(shots))
-    assert abs(detail["duration"] - expected) < 0.3  # mp3 編碼會多出約 0.03 秒
+    assert abs(detail["duration"] - expected) < 0.3
     assert all(seg["thumb_url"] for shot in detail["shots"] for seg in shot["segments"])
 
     video = db.get(Video, first["id"])
     final = renderer.video_dir(video.tenant_id, video.id) / "final.mp4"
     info = media.probe(final, "video")
     assert (info.width, info.height) == (1080, 1920) and info.has_audio
-    assert abs(info.duration - expected) < 0.5
+    # 影像與聲音長度完全一致（不會越來越不同步）
+    streams = json.loads(
+        subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,nb_frames,duration", "-of", "json", str(final)],
+            capture_output=True, check=True,
+        ).stdout
+    )["streams"]
+    v = next(x for x in streams if x["codec_type"] == "video")
+    a = next(x for x in streams if x["codec_type"] == "audio")
+    assert int(v["nb_frames"]) == round(detail["duration"] * 30)
+    assert abs(float(a["duration"]) - float(v["duration"])) < 0.03
+    assert all(seg.get("frames") for shot in db.get(Video, first["id"]).timeline["shots"] for seg in shot["segments"])
     assert not (final.parent / "work").exists()
     assert admin.get("/api/media/auth", headers={"X-Forwarded-Uri": detail["video_url"]}).status_code == 200
 
@@ -187,20 +199,42 @@ def test_render_failure_and_task_center_retry(admin, db, studio, voice_mp3):
     assert db.get(Task, item["id"]).status == "succeeded"
 
 
-def test_choose_segments_prefers_scene_and_fills_duration():
+def _clip(cid, scene, length, quality="good", kind="video", dup=False):
+    return {"clip_id": cid, "asset_id": "x", "kind": kind, "source": "s", "has_audio": False, "start": 0, "end": length,
+            "length": length if kind == "video" else None, "scene": scene, "words": set(), "quality": quality, "duplicate": dup, "index": 0}
+
+
+def test_choose_segments_prefers_scene_and_fills_exact_frames():
     import random
     from collections import Counter
 
-    pool = [
-        {"clip_id": "a", "asset_id": "x", "kind": "video", "source": "s", "has_audio": False, "start": 0, "end": 2, "length": 2.0, "scene": "packing", "words": set(), "quality": "good", "duplicate": False, "index": 0},
-        {"clip_id": "b", "asset_id": "x", "kind": "video", "source": "s", "has_audio": False, "start": 2, "end": 3, "length": 1.0, "scene": "workshop", "words": set(), "quality": "good", "duplicate": False, "index": 1},
-        {"clip_id": "c", "asset_id": "y", "kind": "video", "source": "s", "has_audio": False, "start": 0, "end": 9, "length": 9.0, "scene": "other", "words": set(), "quality": "poor", "duplicate": True, "index": 0},
-    ]
+    pool = [_clip("a", "packing", 2.0), _clip("b", "workshop", 1.0), _clip("c", "other", 9.0, "poor", dup=True)]
     used: set[str] = set()
-    segs = renderer.choose_segments(pool, {"scene": "workshop"}, 2.5, used, Counter(), random.Random(1))
+    segs = renderer.choose_segments(pool, {"scene": "workshop"}, 75, used, Counter(), random.Random(1))
     assert segs[0]["clip_id"] == "b"
-    assert abs(sum(s["duration"] for s in segs) - 2.5) < 0.01
+    assert sum(s["frames"] for s in segs) == 75
     assert used == {s["clip_id"] for s in segs}
+    # 每段讀取的素材長度不超過素材本身（不會停格）
+    assert all(s["src_duration"] <= next(c["length"] for c in pool if c["clip_id"] == s["clip_id"]) + 0.001 for s in segs)
+
+
+def test_choose_segments_slows_down_slightly_short_clip_instead_of_freezing():
+    import random
+    from collections import Counter
+
+    segs = renderer.choose_segments([_clip("a", "workshop", 1.8)], {"scene": "workshop"}, 60, set(), Counter(), random.Random(1))
+    assert len(segs) == 1 and segs[0]["frames"] == 60 and segs[0]["src_duration"] == 1.8
+
+
+def test_choose_segments_reuses_clips_when_pool_is_exhausted():
+    import random
+    from collections import Counter
+
+    pool = [_clip("a", "workshop", 1.0), _clip("b", "workshop", 1.0)]
+    used = {"a", "b"}  # 前面的鏡頭已經用過
+    segs = renderer.choose_segments(pool, {"scene": "workshop"}, 60, used, Counter(), random.Random(2))
+    assert sum(s["frames"] for s in segs) == 60
+    assert {s["clip_id"] for s in segs} == {"a", "b"}
 
 
 def test_subtitles_split_and_ass():

@@ -4,12 +4,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.errors import conflict, not_found
-from app.models import Asset, Script, Task, User, Video, utcnow
+from app.models import Asset, MusicTrack, Script, Task, User, Video, utcnow
 
 TYPE_LABELS = {
     "asset.analyze": "素材分析",
     "script.generate": "產生文案",
     "video.render": "渲染成片",
+    "music.generate": "產生背景音樂",
 }
 
 
@@ -21,7 +22,7 @@ def _target(task: Task) -> str:
         return payload.get("video_id", "")
     if task.type == "script.generate":
         return ",".join(payload.get("script_ids", []))
-    return ""
+    return payload.get("track_id", "")
 
 
 def task_out(task: Task, label: str = "") -> dict:
@@ -47,6 +48,7 @@ def _labels(db: Session, rows: list[Task]) -> dict[str, str]:
     asset_ids = {(t.payload or {}).get("asset_id") for t in rows if t.type == "asset.analyze"}
     video_ids = {(t.payload or {}).get("video_id") for t in rows if t.type == "video.render"}
     script_ids = {(t.payload or {}).get("script_ids", [None])[0] for t in rows if t.type == "script.generate"}
+    track_ids = {(t.payload or {}).get("track_id") for t in rows if t.type == "music.generate"}
     names: dict[str, str] = {}
     if asset_ids:
         names.update(dict(db.execute(select(Asset.id, Asset.original_filename).where(Asset.id.in_(asset_ids))).all()))
@@ -57,10 +59,12 @@ def _labels(db: Session, rows: list[Task]) -> dict[str, str]:
             select(Script.id, Script.template_name, Script.profile_name).where(Script.id.in_(script_ids))
         ).all():
             names[sid] = f"{template} · {profile}"
+    if track_ids:
+        names.update(dict(db.execute(select(MusicTrack.id, MusicTrack.title).where(MusicTrack.id.in_(track_ids))).all()))
     out = {}
     for t in rows:
         payload = t.payload or {}
-        key = payload.get("asset_id") or payload.get("video_id") or (payload.get("script_ids") or [None])[0]
+        key = payload.get("asset_id") or payload.get("video_id") or payload.get("track_id") or (payload.get("script_ids") or [None])[0]
         out[t.id] = names.get(key, "（已刪除）")
     return out
 
@@ -94,6 +98,8 @@ def retry(db: Session, user: User, task_id: str) -> Task:
         asset.status, asset.stage, asset.error = "uploaded", "等待分析", ""
     elif task.type == "video.render" and (video := db.get(Video, payload.get("video_id"))) is not None:
         video.status, video.stage, video.error = "queued", "排隊中", ""
+    elif task.type == "music.generate" and (track := db.get(MusicTrack, payload.get("track_id"))) is not None:
+        track.status, track.error = "generating", ""
     elif task.type == "script.generate":
         for script in db.scalars(select(Script).where(Script.id.in_(payload.get("script_ids", [])))).all():
             script.status, script.error = "generating", ""

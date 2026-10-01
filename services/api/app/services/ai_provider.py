@@ -25,7 +25,7 @@ from app.models import ChannelModel, ModelChannel, UsageLedger, User
 from app.security import decrypt_secret, validate_upstream_url
 
 CHAT_CAPABILITIES = {"text", "vision"}
-CAPABILITY_NAMES = {"text": "文字", "vision": "看圖", "tts": "配音", "embedding": "向量"}
+CAPABILITY_NAMES = {"text": "文字", "vision": "看圖", "tts": "配音", "music": "背景音樂", "embedding": "向量"}
 
 
 @dataclass
@@ -314,47 +314,71 @@ def _tts_input(model: ChannelModel, text: str, voice_id: str, speed: float, styl
     }
 
 
-def _kie_tts(model: ChannelModel, api_key: str, text: str, voice_id: str, speed: float, style: str) -> tuple[bytes, object]:
-    """kie.ai Market 任務：createTask → 輪詢 recordInfo → 下載音檔。回傳 (音檔, 消耗點數)。"""
+def _kie_task(model: ChannelModel, api_key: str, task_input: dict, *, label: str, timeout: float) -> dict:
+    """kie.ai Market 任務：createTask → 輪詢 recordInfo，回傳成功時的 data（含 resultJson、creditsConsumed）。"""
     base_url = validate_upstream_url(model.channel.base_url)
     created = _json(
-        _send(
-            "POST",
-            f"{base_url}/api/v1/jobs/createTask",
-            api_key,
-            {"model": model.model_key, "input": _tts_input(model, text, voice_id, speed, style)},
-        )
+        _send("POST", f"{base_url}/api/v1/jobs/createTask", api_key, {"model": model.model_key, "input": task_input})
     )
     task_id = (created.get("data") or {}).get("taskId") if created.get("code") == 200 else None
     if not task_id:
-        raise upstream_error(f"建立配音任務失敗：{created.get('msg') or created.get('code')}")
+        raise upstream_error(f"建立{label}任務失敗：{created.get('msg') or created.get('code')}")
 
-    deadline = time.monotonic() + TTS_TIMEOUT_SECONDS
+    deadline = time.monotonic() + timeout
     while True:
         info = _json(_send("GET", f"{base_url}/api/v1/jobs/recordInfo", api_key, params={"taskId": task_id}))
         data = info.get("data") or {}
         state = data.get("state")
         if state == "success":
-            break
+            return data
         if state == "fail" or info.get("code") not in (200, None):
-            raise upstream_error(f"配音失敗：{data.get('failMsg') or info.get('msg') or '未知原因'}")
+            raise upstream_error(f"{label}失敗：{data.get('failMsg') or info.get('msg') or '未知原因'}")
         if time.monotonic() > deadline:
-            raise upstream_error("配音逾時，請稍後再試", "upstream_timeout")
+            raise upstream_error(f"{label}逾時，請稍後再試", "upstream_timeout")
         time.sleep(TTS_POLL_SECONDS)
 
+
+def _download_audio(url: str, label: str) -> bytes:
     try:
-        audio_url = json.loads(data.get("resultJson") or "{}")["resultUrls"][0]
-    except (ValueError, KeyError, IndexError, TypeError):
-        raise upstream_error("配音結果格式無法解析") from None
-    try:
-        response = httpx.get(
-            validate_upstream_url(audio_url), timeout=get_settings().upstream_timeout_seconds, follow_redirects=True
-        )
+        response = httpx.get(validate_upstream_url(url), timeout=get_settings().upstream_timeout_seconds, follow_redirects=True)
     except httpx.HTTPError as exc:
-        raise upstream_error(f"下載配音檔失敗：{type(exc).__name__}") from None
+        raise upstream_error(f"下載{label}失敗：{type(exc).__name__}") from None
     if response.status_code >= 400 or not response.content or len(response.content) > MAX_AUDIO_BYTES:
-        raise upstream_error(f"下載配音檔失敗（HTTP {response.status_code}）")
-    return response.content, data.get("creditsConsumed")
+        raise upstream_error(f"下載{label}失敗（HTTP {response.status_code}）")
+    return response.content
+
+
+def _audio_urls(value) -> list[str]:
+    """從 kie 的 resultJson 找出所有音檔網址（resultUrls 或 audio_url，不同模型格式不同）。"""
+    found: list[str] = []
+
+    def walk(item):
+        if isinstance(item, dict):
+            for key, inner in item.items():
+                if key in ("resultUrls", "audio_url", "audioUrl") and isinstance(inner, (str, list)):
+                    for url in [inner] if isinstance(inner, str) else inner:
+                        if isinstance(url, str) and url.startswith("http") and url not in found:
+                            found.append(url)
+                else:
+                    walk(inner)
+        elif isinstance(item, list):
+            for inner in item:
+                walk(inner)
+
+    walk(value)
+    return found
+
+
+def _kie_tts(model: ChannelModel, api_key: str, text: str, voice_id: str, speed: float, style: str) -> tuple[bytes, object]:
+    """kie.ai 配音：回傳 (音檔, 消耗點數)。"""
+    data = _kie_task(model, api_key, _tts_input(model, text, voice_id, speed, style), label="配音", timeout=TTS_TIMEOUT_SECONDS)
+    try:
+        urls = _audio_urls(json.loads(data.get("resultJson") or "{}"))
+    except ValueError:
+        urls = []
+    if not urls:
+        raise upstream_error("配音結果格式無法解析")
+    return _download_audio(urls[0], "配音檔"), data.get("creditsConsumed")
 
 
 def tts(
@@ -383,3 +407,50 @@ def tts(
         entry.input_tokens = len(text)
         entry.cost_micros = credits_to_micros(credits) if credits is not None else None
     return TtsResult(audio, len(text), entry.duration_ms, entry.cost_micros, audio_extension(audio))
+
+
+# ---------------------------------------------------------------- 背景音樂
+MUSIC_TIMEOUT_SECONDS = 600.0
+# Suno 版本：V6_MINI 速度快、價格低，適合當背景音樂
+SUNO_VERSION = "V6_MINI"
+
+
+@dataclass
+class MusicResult:
+    tracks: list[bytes]
+    duration_ms: int
+    cost_micros: int | None
+
+
+def music(db: Session, model: ChannelModel, style: str, title: str, *, source: str, user: User | None) -> MusicResult:
+    """用 kie.ai 的 Suno 產生純音樂（不含人聲），通常一次回傳 2 首。"""
+    if model.capability != "music":
+        raise bad_request("這個模型不是背景音樂模型", "unsupported_capability")
+    if model.channel.provider != "kie":
+        raise bad_request("目前只支援 kie.ai 的 Suno 音樂模型", "unsupported_provider")
+    api_key = _check_usable(model)
+    with _ledger(db, model, "ai.music", source, user) as entry:
+        data = _kie_task(
+            model,
+            api_key,
+            {
+                "custom_mode": True,
+                "instrumental": True,
+                "model": SUNO_VERSION,
+                "style": style[:1000],
+                "title": title[:80],
+                "negative_tags": "vocals, singing, voice, lyrics",
+            },
+            label="產生背景音樂",
+            timeout=MUSIC_TIMEOUT_SECONDS,
+        )
+        try:
+            urls = _audio_urls(json.loads(data.get("resultJson") or "{}"))
+        except ValueError:
+            urls = []
+        if not urls:
+            raise upstream_error("背景音樂結果格式無法解析")
+        tracks = [_download_audio(url, "背景音樂") for url in urls[:2]]
+        credits = data.get("creditsConsumed")
+        entry.cost_micros = credits_to_micros(credits) if credits is not None else None
+    return MusicResult(tracks, entry.duration_ms, entry.cost_micros)
