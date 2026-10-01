@@ -11,7 +11,8 @@ from app.schemas import ok
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
-_SAFE_PATH = re.compile(r"^/media/([0-9a-f-]{36})/assets/[0-9a-f-]{36}/[A-Za-z0-9._/-]+$")
+# 允許的位置：素材目錄 assets/{asset_id}/… 與配音試聽 tts/…
+_SAFE_PATH = re.compile(r"^/media/([0-9a-f-]{36})/(?:assets/[0-9a-f-]{36}|tts)/[A-Za-z0-9._/-]+$")
 
 
 def allowed(uri: str, tenant_id: str) -> bool:

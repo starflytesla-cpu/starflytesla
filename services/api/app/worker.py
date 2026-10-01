@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_sessionmaker
 from app.models import Task, Upload, utcnow
-from app.services import asset_analyzer, media, tasks
+from app.services import asset_analyzer, media, script_writer, speech, tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("starfly.worker")
@@ -31,6 +31,7 @@ HEARTBEAT_FILE = Path("/tmp/worker-heartbeat")
 
 HANDLERS: dict[str, Callable[[Session, Task], dict]] = {
     asset_analyzer.TASK_TYPE: asset_analyzer.analyze_task,
+    script_writer.TASK_TYPE: script_writer.generate_task,
 }
 
 
@@ -116,7 +117,7 @@ class Worker:
 
 
 def cleanup(db: Session) -> None:
-    """刪除 3 天沒有進度的未完成上傳，以及 30 天前已完成的任務記錄。"""
+    """刪除 3 天沒有進度的未完成上傳、30 天前已完成的任務記錄、7 天前的配音試聽檔。"""
     stale = db.scalars(
         select(Upload).where(Upload.completed.is_(False), Upload.updated_at < utcnow() - timedelta(days=3))
     ).all()
@@ -129,6 +130,8 @@ def cleanup(db: Session) -> None:
     db.commit()
     if stale:
         log.info("清除 %d 個放棄的上傳", len(stale))
+    if removed := speech.cleanup_previews():
+        log.info("清除 %d 個過期的配音試聽檔", removed)
 
 
 def main() -> None:

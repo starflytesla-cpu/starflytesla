@@ -273,3 +273,94 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ---------------------------------------------------------------- Phase 2 帳號檔案、模板、文案
+class BrandProfile(Base):
+    """帳號檔案（人設）：AI 寫文案、挑素材、配音都參考這份資料。一個帳號群對應一份。"""
+
+    __tablename__ = "brand_profiles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    industry: Mapped[str] = mapped_column(String(120), default="")
+    audience: Mapped[str] = mapped_column(String(500), default="")
+    selling_points: Mapped[list] = mapped_column(JSON, default=list)
+    product_details: Mapped[str] = mapped_column(Text, default="")
+    tone: Mapped[str] = mapped_column(String(200), default="")
+    # 影片文案與配音的語言（ISO 代碼，例如 en、es、ja）
+    target_language: Mapped[str] = mapped_column(String(16), default="en")
+    call_to_action: Mapped[str] = mapped_column(String(200), default="")
+    hashtags: Mapped[list] = mapped_column(JSON, default=list)
+    # 不能出現在文案裡的詞（例如未取得的認證、競品名稱）
+    banned_words: Mapped[list] = mapped_column(JSON, default=list)
+    # ElevenLabs 音色 ID 與語速（0.7～1.2）
+    voice_id: Mapped[str] = mapped_column(String(40), default="")
+    voice_speed: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Template(Base):
+    """影片模板：一串鏡頭，每個鏡頭有「要拍什麼 / 說什麼」與期望畫面類型和秒數。
+
+    tenant_id 為空代表系統內建模板（由 app/services/template_library.py 同步，不能修改，可以複製成自訂模板）。
+    """
+
+    __tablename__ = "templates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    builtin_key: Mapped[str | None] = mapped_column(String(48), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
+    # persona 人設型 / traffic 流量型 / conversion 成交型
+    strategy: Mapped[str] = mapped_column(String(16))
+    description: Mapped[str] = mapped_column(String(500), default="")
+    # [{brief: 鏡頭重點, scene: 場景代碼, seconds: 秒數}]
+    shots: Mapped[list] = mapped_column(JSON, default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Script(Base):
+    """一版影片文案：依模板的鏡頭逐一寫好配音稿與畫面字幕。同一次產生的多個版本共用 batch_id。
+
+    status：generating 產生中 / draft 草稿 / approved 已核准（Phase 3 混剪只用已核准的）/ failed 失敗
+    """
+
+    __tablename__ = "scripts"
+    __table_args__ = (Index("ix_scripts_tenant_created", "tenant_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    template_id: Mapped[str | None] = mapped_column(
+        ForeignKey("templates.id", ondelete="SET NULL"), index=True
+    )
+    profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("brand_profiles.id", ondelete="SET NULL"), index=True
+    )
+    # 模板或帳號檔案之後被刪掉時，仍然看得出這份文案的來源
+    template_name: Mapped[str] = mapped_column(String(80), default="")
+    profile_name: Mapped[str] = mapped_column(String(80), default="")
+    batch_id: Mapped[str] = mapped_column(String(36), index=True)
+    variant: Mapped[int] = mapped_column(Integer, default=1)
+    language: Mapped[str] = mapped_column(String(16), default="en")
+    status: Mapped[str] = mapped_column(String(16), default="generating", index=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    hook: Mapped[str] = mapped_column(String(300), default="")
+    # [{brief, scene, seconds, voiceover: 配音稿, caption: 畫面字幕}]
+    shots: Mapped[list] = mapped_column(JSON, default=list)
+    post_caption: Mapped[str] = mapped_column(String(2200), default="")
+    hashtags: Mapped[list] = mapped_column(JSON, default=list)
+    error: Mapped[str] = mapped_column(String(500), default="")
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )

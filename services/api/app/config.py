@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # 預設拒絕指向本機 / 私網的上游網址（防 SSRF）；只有自架模型服務時才需要打開。
     allow_private_upstreams: bool = False
     upstream_timeout_seconds: float = 60.0
+    # kie.ai 每點數的美元價格，用來把 kie 回報的點數換算成成本（請以 kie.ai 帳單為準）
+    kie_usd_per_credit: float = 0.005
 
     # ------------------------------------------------ 素材中心
     # 素材檔案存放位置（Docker 內掛載資料碟上的 volume）

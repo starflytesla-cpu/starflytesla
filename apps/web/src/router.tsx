@@ -8,6 +8,9 @@ import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import UsagePage from './pages/UsagePage'
 import AssetsPage from './pages/assets/AssetsPage'
+import ProfilesPage from './pages/ProfilesPage'
+import TemplatesPage from './pages/templates/TemplatesPage'
+import VoicesPage from './pages/VoicesPage'
 import UsersPage from './pages/UsersPage'
 
 const comingSoon = WORK_ITEMS.filter((item) => item.phase).map((item) => ({
@@ -33,6 +36,30 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'assets', element: <AssetsPage /> },
+      {
+        path: 'profiles',
+        element: (
+          <AdminOnly>
+            <ProfilesPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'templates',
+        element: (
+          <AdminOnly>
+            <TemplatesPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'voices',
+        element: (
+          <AdminOnly>
+            <VoicesPage />
+          </AdminOnly>
+        ),
+      },
       ...comingSoon,
       {
         path: 'settings/channels',

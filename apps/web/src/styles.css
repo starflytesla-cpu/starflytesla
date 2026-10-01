@@ -454,3 +454,126 @@ body {
 .clip-desc {
   margin-bottom: 2px;
 }
+
+/* ---------- 帳號檔案、模板、文案、音色 ---------- */
+.clickable {
+  cursor: pointer;
+}
+
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.profile-line {
+  margin-bottom: 6px !important;
+}
+
+.template-card .ant-card-head-title {
+  white-space: normal;
+}
+
+.template-desc {
+  min-height: 44px;
+}
+
+.shot-list {
+  display: grid;
+  gap: 10px;
+}
+
+.shot-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f7f9fe;
+}
+
+.shot-index {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--brand-gradient);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shot-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.shot-field {
+  margin-bottom: 0 !important;
+}
+
+.shot-scene {
+  min-width: 130px;
+}
+
+.shot-seconds {
+  width: 100px;
+}
+
+.script-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.script-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.script-hook {
+  margin-bottom: 6px !important;
+  min-height: 44px;
+}
+
+.script-warn {
+  margin-top: 6px;
+}
+
+.voice-card .ant-card-body {
+  display: grid;
+  gap: 10px;
+}
+
+.voice-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.voice-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.voice-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 0;
+}
+
+.voice-tags:empty {
+  display: none;
+}
+
+.voice-bind {
+  min-width: 150px;
+}

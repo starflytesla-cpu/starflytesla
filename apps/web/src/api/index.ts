@@ -72,6 +72,8 @@ export interface UsageItem {
 
 export interface TestResult {
   reply: string
+  /** 配音模型的測試音檔 */
+  audio_url?: string
   input_tokens: number
   output_tokens: number
   duration_ms: number
@@ -159,6 +161,111 @@ export interface AssetQuery {
   mine?: boolean
 }
 
+// ---------------------------------------------------------------- 帳號檔案、模板、文案、音色
+export type Strategy = 'persona' | 'traffic' | 'conversion'
+export type ScriptStatus = 'generating' | 'draft' | 'approved' | 'failed'
+
+export interface Profile {
+  id: string
+  name: string
+  industry: string
+  audience: string
+  selling_points: string[]
+  product_details: string
+  tone: string
+  target_language: string
+  call_to_action: string
+  hashtags: string[]
+  banned_words: string[]
+  voice_id: string
+  voice_name: string
+  voice_speed: number
+  script_count: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProfileInput = Partial<
+  Omit<Profile, 'id' | 'voice_name' | 'script_count' | 'created_at' | 'updated_at'>
+>
+
+export interface TemplateShot {
+  brief: string
+  scene: string
+  seconds: number
+}
+
+export interface Template {
+  id: string
+  builtin: boolean
+  name: string
+  strategy: Strategy
+  description: string
+  shots: TemplateShot[]
+  total_seconds: number
+  is_active: boolean
+  script_count: number | null
+  updated_at: string
+}
+
+export type TemplateInput = Partial<Pick<Template, 'name' | 'strategy' | 'description' | 'shots' | 'is_active'>>
+
+export interface ScriptShot extends TemplateShot {
+  voiceover: string
+  caption: string
+}
+
+export interface Script {
+  id: string
+  batch_id: string
+  variant: number
+  template_id: string | null
+  template_name: string
+  profile_id: string | null
+  profile_name: string
+  language: string
+  status: ScriptStatus
+  title: string
+  hook: string
+  shots: ScriptShot[]
+  post_caption: string
+  hashtags: string[]
+  error: string
+  total_seconds: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ScriptQuery {
+  limit: number
+  offset: number
+  template_id?: string
+  profile_id?: string
+  status?: ScriptStatus
+}
+
+export type ScriptInput = Partial<{
+  title: string
+  hook: string
+  shots: { voiceover: string; caption: string }[]
+  post_caption: string
+  hashtags: string[]
+  status: 'draft' | 'approved'
+}>
+
+export interface Voice {
+  id: string
+  name: string
+  description: string
+  recommended: boolean
+  preview_url: string
+}
+
+export interface AudioResult {
+  audio_url: string
+  cost_usd: number | null
+}
+
 export type ClipInput = Partial<{
   scene: string
   subjects: string[]
@@ -223,6 +330,30 @@ export const api = {
   reanalyzeAsset: (id: string) => http.post<AssetDetail>(`/assets/${id}/reanalyze`),
   updateClip: (id: string, body: ClipInput) => http.patch<AssetDetail>(`/clips/${id}`, body),
 
+  profiles: () => http.get<{ items: Profile[]; languages: Record<string, string> }>('/profiles'),
+  createProfile: (body: ProfileInput) => http.post<Profile>('/profiles', body),
+  updateProfile: (id: string, body: ProfileInput) => http.patch<Profile>(`/profiles/${id}`, body),
+  deleteProfile: (id: string) => http.delete<null>(`/profiles/${id}`),
+
+  templates: () => http.get<{ items: Template[]; strategies: Record<Strategy, string> }>('/templates'),
+  createTemplate: (body: TemplateInput) => http.post<Template>('/templates', body),
+  copyTemplate: (id: string) => http.post<Template>(`/templates/${id}/copy`),
+  updateTemplate: (id: string, body: TemplateInput) => http.patch<Template>(`/templates/${id}`, body),
+  deleteTemplate: (id: string) => http.delete<null>(`/templates/${id}`),
+
+  scripts: (params: ScriptQuery) => http.get<{ items: Script[]; total: number }>('/scripts', params),
+  generateScripts: (body: { template_id: string; profile_id: string; variants: number }) =>
+    http.post<Script[]>('/scripts/generate', body),
+  updateScript: (id: string, body: ScriptInput) => http.patch<Script>(`/scripts/${id}`, body),
+  regenerateScript: (id: string) => http.post<Script>(`/scripts/${id}/regenerate`),
+  deleteScript: (id: string) => http.delete<null>(`/scripts/${id}`),
+  // 配音要等上游產生，最多約 3 分鐘
+  scriptAudio: (id: string) => http.post<AudioResult>(`/scripts/${id}/preview-audio`, {}, { timeout: 200_000 }),
+
+  voices: () => http.get<Voice[]>('/voices'),
+  voicePreview: (body: { voice_id: string; text: string; speed: number }) =>
+    http.post<AudioResult>('/voices/preview', body, { timeout: 200_000 }),
+
   usage: (params: { limit: number; offset: number; status?: string }) =>
     http.get<{ items: UsageItem[]; total: number }>('/usage', params),
   usageSummary: () =>
@@ -244,6 +375,19 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   vision: '看圖',
   tts: '配音',
   embedding: '向量',
+}
+
+export const STRATEGY_LABELS: Record<Strategy, { label: string; color: string }> = {
+  persona: { label: '人設型', color: 'purple' },
+  traffic: { label: '流量型', color: 'orange' },
+  conversion: { label: '成交型', color: 'green' },
+}
+
+export const SCRIPT_STATUS: Record<ScriptStatus, { label: string; color: string }> = {
+  generating: { label: '產生中', color: 'processing' },
+  draft: { label: '草稿', color: 'default' },
+  approved: { label: '已核准', color: 'success' },
+  failed: { label: '失敗', color: 'error' },
 }
 
 /** 場景分類；與後端 app/services/asset_analyzer.py 的 SCENES 同步 */

@@ -30,6 +30,7 @@
 - **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。kie.ai 的特殊處理也在這裡：網址是 `{base}/{model_key}/v1/chat/completions`、預設串流要關掉、圖片要先經 kie 檔案上傳 API 換成網址。
 - 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
 - 背景任務：`app/services/tasks.py` 的 `enqueue` 排入 `tasks` 表，`app/worker.py`（`worker` 容器）領取執行；新任務類型在 `HANDLERS` 註冊。FFmpeg 呼叫集中在 `app/services/media.py`。
+- 文案：`script_writer.py`（worker 任務 `script.generate`）組 prompt 與解析；內建模板在 `template_library.py`（改完重新部署即同步）；音色清單在 `voices.py`；配音試聽在 `speech.py`（`ai_provider.tts`）。
 - 素材檔案在 `MEDIA_ROOT`（容器內 `/media`），網址 `/media/{tenant}/assets/{asset}/...` 由 Caddy 經 `/api/media/auth` 檢查權限後直接提供。場景分類代碼在 `asset_analyzer.SCENES`，前端 `SCENE_LABELS` 要同步。
 - `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫（唯一例外：上傳用 `src/api/upload.ts` 的 tus-js-client）；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
 - 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫與 ffmpeg）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
@@ -87,5 +88,7 @@
 - [x] 登入卡住（使用者代理造成）與伺服器連外問題已解決，維運通道自動部署正常（2026-09-30）
 - [ ] 用真實 API Key 測試 DeepSeek 與豆包
 - [x] Phase 1 素材中心程式完成（2026-10-01）：tus 斷點續傳、worker（轉檔 / 切鏡頭 / 看圖模型標籤 / 重複偵測）、素材庫頁面
-- [ ] Phase 1 部署後驗收：使用者用手機實際上傳工廠影片，並設定豆包看圖模型
+- [x] Phase 1 驗收通過（2026-10-01）：使用者實測上傳與 kie.ai Gemini 3.8 Flash 看圖標註成功
+- [x] Phase 2 程式完成（2026-10-01）：帳號檔案、14 個內建模板、DeepSeek 多版本文案、ElevenLabs 音色試聽與綁定
+- [ ] Phase 2 驗收：使用者用真實 DeepSeek 產生文案、試聽 kie.ai 配音
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP

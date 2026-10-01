@@ -42,7 +42,8 @@ import {
 import { ApiError } from '../api/http'
 import PageHeader from '../components/PageHeader'
 
-const CHAT_CAPS: Capability[] = ['text', 'vision']
+// 可以在後台按「測試」的模型：文字 / 看圖回覆一句話，配音產生一段試聽音檔
+const CHAT_CAPS: Capability[] = ['text', 'vision', 'tts']
 
 function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : '操作失敗'
@@ -284,10 +285,15 @@ export default function ChannelsPage() {
         {testResult ? (
           <>
             <Alert type="success" showIcon title={testResult.result.reply || '（模型沒有回傳文字）'} className="section" />
+            {testResult.result.audio_url ? (
+              <audio src={testResult.result.audio_url} controls autoPlay className="full-width section" />
+            ) : null}
             <Descriptions size="small" column={1} bordered>
               <Descriptions.Item label="模型">{testResult.model.display_name}</Descriptions.Item>
-              <Descriptions.Item label="Token">
-                輸入 {testResult.result.input_tokens} / 輸出 {testResult.result.output_tokens}
+              <Descriptions.Item label={testResult.result.audio_url ? '字元數' : 'Token'}>
+                {testResult.result.audio_url
+                  ? testResult.result.input_tokens
+                  : `輸入 ${testResult.result.input_tokens} / 輸出 ${testResult.result.output_tokens}`}
               </Descriptions.Item>
               <Descriptions.Item label="耗時">{(testResult.result.duration_ms / 1000).toFixed(1)} 秒</Descriptions.Item>
               <Descriptions.Item label="估算成本">{formatUsd(testResult.result.cost_usd)}</Descriptions.Item>

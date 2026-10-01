@@ -164,3 +164,62 @@ class ClipUpdateIn(BaseModel):
     description: str | None = Field(default=None, max_length=200)
     quality: Quality | None = None
     is_disabled: bool | None = None
+
+
+# ---------------------------------------------------------------- 帳號檔案、模板、文案、音色
+ShortList = Annotated[list[Annotated[str, Field(max_length=200)]], Field(max_length=15)]
+
+
+class ProfileIn(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    industry: str | None = Field(default=None, max_length=120)
+    audience: str | None = Field(default=None, max_length=500)
+    selling_points: ShortList | None = None
+    product_details: str | None = Field(default=None, max_length=5000)
+    tone: str | None = Field(default=None, max_length=200)
+    target_language: str | None = Field(default=None, max_length=16)
+    call_to_action: str | None = Field(default=None, max_length=200)
+    hashtags: ShortList | None = None
+    banned_words: ShortList | None = None
+    voice_id: str | None = Field(default=None, max_length=40)
+    voice_speed: float | None = Field(default=None, ge=0.7, le=1.2)
+
+
+class ShotIn(BaseModel):
+    brief: str = Field(min_length=1, max_length=300)
+    scene: str = Field(default="", max_length=32)
+    seconds: float = Field(default=4, ge=1, le=30)
+
+
+class TemplateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    strategy: Literal["persona", "traffic", "conversion"] | None = None
+    description: str | None = Field(default=None, max_length=500)
+    shots: Annotated[list[ShotIn], Field(min_length=1, max_length=12)] | None = None
+    is_active: bool | None = None
+
+
+class GenerateScriptsIn(BaseModel):
+    template_id: str
+    profile_id: str
+    variants: int = Field(default=3, ge=1, le=5)
+
+
+class ScriptShotIn(BaseModel):
+    voiceover: str = Field(default="", max_length=600)
+    caption: str = Field(default="", max_length=120)
+
+
+class ScriptUpdateIn(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    hook: str | None = Field(default=None, max_length=300)
+    shots: list[ScriptShotIn] | None = None
+    post_caption: str | None = Field(default=None, max_length=2200)
+    hashtags: ShortList | None = None
+    status: Literal["draft", "approved"] | None = None
+
+
+class VoicePreviewIn(BaseModel):
+    voice_id: str = Field(max_length=40)
+    text: str = Field(min_length=1, max_length=1500)
+    speed: float = Field(default=1.0, ge=0.7, le=1.2)

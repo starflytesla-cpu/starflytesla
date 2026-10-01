@@ -8,8 +8,22 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db import get_sessionmaker
 from app.errors import AppError
-from app.routers import assets, auth, channels, media, system, uploads, usage, users
+from app.routers import (
+    assets,
+    auth,
+    channels,
+    media,
+    profiles,
+    scripts,
+    system,
+    templates,
+    uploads,
+    usage,
+    users,
+    voices,
+)
 from app.services.bootstrap import ensure_initial_admin
+from app.services.template_library import sync_builtin_templates
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("starfly")
@@ -19,6 +33,7 @@ log = logging.getLogger("starfly")
 async def lifespan(_app: FastAPI):
     with get_sessionmaker()() as db:
         ensure_initial_admin(db)
+        sync_builtin_templates(db)
     yield
 
 
@@ -57,5 +72,5 @@ async def unhandled_error_handler(request: Request, exc: Exception):
     return _error(500, "internal_error", "系統處理失敗，請稍後再試")
 
 
-for module in (system, auth, users, channels, usage, uploads, assets, media):
+for module in (system, auth, users, channels, usage, uploads, assets, media, profiles, templates, scripts, voices):
     app.include_router(module.router)

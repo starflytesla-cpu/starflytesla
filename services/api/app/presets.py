@@ -68,6 +68,17 @@ PRESETS: dict[str, dict] = {
                 "capability": "vision",
                 "is_default": True,
             },
+            {
+                "model_key": "elevenlabs/text-to-speech-multilingual-v2",
+                "display_name": "ElevenLabs Multilingual v2",
+                "capability": "tts",
+                "is_default": True,
+            },
+            {
+                "model_key": "elevenlabs/text-to-speech-turbo-2-5",
+                "display_name": "ElevenLabs Turbo 2.5（較便宜）",
+                "capability": "tts",
+            },
         ],
     },
     "custom": {

@@ -19,7 +19,7 @@ from app.schemas import (
     ok,
 )
 from app.security import encrypt_secret, validate_upstream_url
-from app.services import ai_provider
+from app.services import ai_provider, speech
 
 router = APIRouter(prefix="/api", tags=["channels"])
 
@@ -197,6 +197,22 @@ def delete_model(model_id: str, admin: AdminUser, db: DB):
 @router.post("/channel-models/{model_id}/test")
 def test_model(model_id: str, body: ChannelTestIn, admin: AdminUser, db: DB):
     model = _get_model(db, admin, model_id)
+    if model.capability == "tts":
+        # 配音模型：用預設音色念一句英文，回傳可以播放的音檔
+        audio = speech.synthesize(
+            db, admin, speech.DEFAULT_TEST_TEXT, speech.default_voice_id(), source="channel_test", model=model
+        )
+        return ok(
+            {
+                "reply": f"已產生測試配音（{audio['characters']} 個字元）",
+                "audio_url": audio["audio_url"],
+                "input_tokens": audio["characters"],
+                "output_tokens": 0,
+                "duration_ms": audio["duration_ms"],
+                "cost_usd": micros_to_usd(audio["cost_micros"]),
+            },
+            "測試成功",
+        )
     result = ai_provider.chat(
         db,
         model,

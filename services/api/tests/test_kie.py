@@ -25,7 +25,7 @@ def create_kie(admin):
 
 def test_kie_preset_has_gemini_vision_model(admin):
     channel = create_kie(admin)
-    model = channel["models"][0]
+    model = next(m for m in channel["models"] if m["capability"] == "vision")
     assert model["model_key"] == "gemini-3-8-flash-openai"
     assert model["capability"] == "vision" and model["is_default"] is True
     assert "vision" in admin.get("/api/dashboard").json()["data"]["ready_capabilities"]
@@ -59,7 +59,7 @@ def test_kie_image_is_uploaded_and_model_path_used(admin, db):
 
 def test_kie_gemini_native_response_and_errors(admin, db):
     create_kie(admin)
-    model = db.scalars(select(ChannelModel)).one()
+    model = db.scalars(select(ChannelModel).where(ChannelModel.capability == "vision")).one()
     text_only = [{"role": "user", "content": "hi"}]
     native = {
         "candidates": [{"content": {"parts": [{"text": "思考中", "thought": True}, {"text": "你好"}]}}],
@@ -95,16 +95,18 @@ def test_openai_compatible_requests_disable_streaming(admin, db):
 def test_migration_adds_gemini_to_existing_kie_channel(admin, db):
     channel = create_kie(admin)
     # 模擬舊版建立的 kie 渠道：沒有任何模型
-    db.query(ChannelModel).delete()
+    db.query(ChannelModel).filter(ChannelModel.capability == "vision").delete()
     db.commit()
     cfg = Config(os.path.join(API_DIR, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(API_DIR, "migrations"))
     command.downgrade(cfg, "0002")
     command.upgrade(cfg, "head")
     db.expire_all()
-    models = db.scalars(select(ChannelModel).where(ChannelModel.channel_id == channel["id"])).all()
+    models = db.scalars(
+        select(ChannelModel).where(ChannelModel.channel_id == channel["id"], ChannelModel.capability == "vision")
+    ).all()
     assert [(m.model_key, m.capability, m.is_default) for m in models] == [("gemini-3-8-flash-openai", "vision", True)]
     # 再跑一次不會重複新增
     command.downgrade(cfg, "0002")
     command.upgrade(cfg, "head")
-    assert len(db.scalars(select(ChannelModel)).all()) == 1
+    assert len(db.scalars(select(ChannelModel).where(ChannelModel.capability == "vision")).all()) == 1

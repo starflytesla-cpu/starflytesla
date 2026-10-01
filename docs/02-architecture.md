@@ -11,6 +11,10 @@
 > - **worker** 是獨立容器（與 API 同一份程式碼，`python -m app.worker`），從 `tasks` 表領任務；執行中每 30 秒延長租約，當機 2 分鐘後任務會被重新領取；部署時收到停止訊號會中止 FFmpeg 並把任務放回佇列。
 > - **素材檔案**放在 Docker volume `media`（位於資料碟），網頁讀取 `/media/...` 時由 Caddy 先呼叫 `/api/media/auth` 檢查登入與租戶，通過才直接回傳檔案（支援影片拖曳的 Range 請求）。
 > - 資料表：`uploads`（上傳中）、`assets`（素材）、`clips`（鏡頭）、`tasks`（背景任務）。
+>
+> **Phase 2 實作後的調整（2026-10-01）**
+> - 資料表：`brand_profiles`（帳號檔案，含音色）、`templates`（tenant_id 為空 = 內建，鏡頭存 JSON）、`scripts`（每個版本一筆，同批共用 batch_id）。不另建 template_shot 表。
+> - 內建模板寫在 `app/services/template_library.py`，API 啟動時同步；配音用 kie.ai 的 ElevenLabs（建立任務 → 輪詢 → 下載 mp3），試聽檔存在 `/media/{tenant}/tts/`，7 天後自動清除。
 
 ## 1. 總覽
 
