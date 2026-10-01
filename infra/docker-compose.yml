@@ -18,6 +18,18 @@ services:
       timeout: 5s
       retries: 20
 
+  # 一次性步驟：把素材 volume 的擁有者設成 api / worker 的執行帳號（uid 10001）。
+  # volume 第一次被哪個容器掛載會決定它的擁有者，Caddy 先掛載時會變成 root，api 就無法寫入。
+  media-init:
+    build: ../services/api
+    user: "0:0"
+    command: ["chown", "10001:10001", "/media"]
+    volumes:
+      - media:/media
+    restart: "no"
+    healthcheck:
+      disable: true
+
   api:
     build: ../services/api
     restart: unless-stopped
@@ -32,6 +44,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
 
   # 背景任務：素材分析（FFmpeg 轉檔、切鏡頭、AI 標註）。與 api 使用同一份程式碼。
   worker:
@@ -57,6 +71,8 @@ services:
       # api 啟動時會先套用資料庫遷移
       api:
         condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
 
   web:
     build: ../apps/web

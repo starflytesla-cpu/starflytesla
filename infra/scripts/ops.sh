@@ -50,6 +50,13 @@ cmd_status() {
   df -h / /data 2>/dev/null || df -h /
   echo "== 素材檔案"
   "${COMPOSE[@]}" exec -T api du -sh /media 2>/dev/null || echo "  （無法讀取）"
+  for service in api worker; do
+    if "${COMPOSE[@]}" exec -T "$service" test -w /media 2>/dev/null; then
+      echo "  $service 可寫入 /media"
+    else
+      echo "  [錯誤] $service 無法寫入 /media（上傳會失敗）"
+    fi
+  done
   echo "== 最近部署"
   tail -5 .deploy-history.log 2>/dev/null || echo "  （沒有記錄）"
 }
