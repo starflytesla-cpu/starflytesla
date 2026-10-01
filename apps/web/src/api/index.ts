@@ -253,12 +253,16 @@ export type ScriptInput = Partial<{
   status: 'draft' | 'approved'
 }>
 
+export type VoiceEngine = 'gemini' | 'elevenlabs'
+
 export interface Voice {
   id: string
   name: string
   description: string
   recommended: boolean
-  preview_url: string
+  engine: VoiceEngine
+  /** ElevenLabs 有官方免費試聽檔；Gemini 沒有，要呼叫 voiceSample 產生 */
+  preview_url: string | null
 }
 
 export interface AudioResult {
@@ -438,7 +442,9 @@ export const api = {
   // 配音要等上游產生，最多約 3 分鐘
   scriptAudio: (id: string) => http.post<AudioResult>(`/scripts/${id}/preview-audio`, {}, { timeout: 200_000 }),
 
-  voices: () => http.get<Voice[]>('/voices'),
+  voices: () => http.get<{ active_engine: VoiceEngine | null; items: Voice[] }>('/voices'),
+  // Gemini 音色第一次試聽要產生樣本，約 5～30 秒
+  voiceSample: (id: string) => http.post<AudioResult>(`/voices/${id}/sample`, {}, { timeout: 200_000 }),
   voicePreview: (body: { voice_id: string; text: string; speed: number }) =>
     http.post<AudioResult>('/voices/preview', body, { timeout: 200_000 }),
 
@@ -499,6 +505,11 @@ export const SCRIPT_STATUS: Record<ScriptStatus, { label: string; color: string 
   draft: { label: '草稿', color: 'default' },
   approved: { label: '已核准', color: 'success' },
   failed: { label: '失敗', color: 'error' },
+}
+
+export const VOICE_ENGINES: Record<VoiceEngine, string> = {
+  gemini: 'Gemini 3.8',
+  elevenlabs: 'ElevenLabs',
 }
 
 export const VIDEO_STATUS: Record<VideoStatus, { label: string; color: string }> = {

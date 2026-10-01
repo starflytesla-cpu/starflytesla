@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 from app.errors import bad_request, conflict, not_found
 from app.models import BrandProfile, Script, User
 from app.schemas import ScriptUpdateIn
-from app.services import speech
-from app.services.voices import VOICES_BY_ID
+from app.services import ai_provider, speech
 
 
 def script_out(script: Script) -> dict:
@@ -105,6 +104,6 @@ def preview_audio(db: Session, user: User, script: Script) -> dict:
     if not text:
         raise bad_request("文案還沒有配音稿", "script_empty")
     profile = db.get(BrandProfile, script.profile_id) if script.profile_id else None
-    voice_id = profile.voice_id if profile and profile.voice_id in VOICES_BY_ID else speech.default_voice_id()
-    speed = profile.voice_speed if profile else 1.0
-    return speech.synthesize(db, user, text, voice_id, speed=speed, source="script_preview")
+    model = ai_provider.default_model(db, user.tenant_id, "tts")
+    voice_id, speed, style = speech.profile_voice(model, profile)
+    return speech.synthesize(db, user, text, voice_id, speed=speed, style=style, source="script_preview", model=model)

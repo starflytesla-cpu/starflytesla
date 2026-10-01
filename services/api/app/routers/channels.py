@@ -200,7 +200,7 @@ def test_model(model_id: str, body: ChannelTestIn, admin: AdminUser, db: DB):
     if model.capability == "tts":
         # 配音模型：用預設音色念一句英文，回傳可以播放的音檔
         audio = speech.synthesize(
-            db, admin, speech.DEFAULT_TEST_TEXT, speech.default_voice_id(), source="channel_test", model=model
+            db, admin, speech.DEFAULT_TEST_TEXT, speech.default_voice_id(model), source="channel_test", model=model
         )
         return ok(
             {

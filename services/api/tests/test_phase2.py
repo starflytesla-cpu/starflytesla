@@ -203,9 +203,40 @@ def test_bad_ai_reply_retries_then_fails(admin, db):
 
 # ---------------------------------------------------------------- 音色與配音
 def test_voice_catalog(admin):
-    voices = admin.get("/api/voices").json()["data"]
-    liam = next(v for v in voices if v["id"] == LIAM)
-    assert liam["recommended"] and liam["preview_url"].endswith(f"/{LIAM}.mp3")
+    data = admin.get("/api/voices").json()["data"]
+    assert data["active_engine"] is None  # 還沒有配音模型
+    liam = next(v for v in data["items"] if v["id"] == LIAM)
+    assert liam["recommended"] and liam["preview_url"].endswith(f"/{LIAM}.mp3") and liam["engine"] == "elevenlabs"
+    kore = next(v for v in data["items"] if v["id"] == "Kore")
+    assert kore["engine"] == "gemini" and kore["preview_url"] is None and kore["description"] == "商業旁白"
+    add_kie(admin)
+    assert admin.get("/api/voices").json()["data"]["active_engine"] == "gemini"
+
+
+def test_gemini_voice_sample_is_generated_once(admin, db, monkeypatch):
+    monkeypatch.setattr("app.services.ai_provider.TTS_POLL_SECONDS", 0)
+    add_kie(admin)
+    with respx.mock:
+        mock_kie_tts()
+        first = admin.post("/api/voices/Kore/sample").json()["data"]
+        second = admin.post("/api/voices/Kore/sample").json()["data"]
+        created = [json.loads(c.request.content) for c in respx.calls if c.request.url.path.endswith("createTask")]
+    assert first["audio_url"] == second["audio_url"] and "/tts/samples/Kore." in first["audio_url"]
+    assert len(created) == 1 and created[0]["input"]["speakers"][0]["voice_name"] == "Kore"
+    assert second["cost_usd"] == 0
+    assert admin.get("/api/media/auth", headers={"X-Forwarded-Uri": first["audio_url"]}).status_code == 200
+    # ElevenLabs 直接用官方免費試聽檔
+    liam = admin.post(f"/api/voices/{LIAM}/sample").json()["data"]
+    assert liam["audio_url"].startswith("https://static.aiquickdraw.com/")
+    assert admin.post("/api/voices/Nobody/sample").status_code == 400
+
+
+def test_tts_audio_extension_detected():
+    from app.services.ai_provider import audio_extension
+
+    assert audio_extension(b"RIFF....WAVEfmt ") == ".wav"
+    assert audio_extension(b"ID3\x04rest") == ".mp3"
+    assert audio_extension(b"OggS....") == ".ogg"
 
 
 def test_voice_preview_with_kie_tts(admin, db, monkeypatch):
@@ -267,8 +298,12 @@ def test_script_preview_audio_uses_profile_voice(admin, db, monkeypatch):
         r = admin.post(f"/api/scripts/{script['id']}/preview-audio")
         sent = json.loads(respx.calls[0].request.content)
     assert r.status_code == 200, r.text
-    assert sent["input"]["voice"] == "hpp4J3VqNfWAUOO0d1Us" and sent["input"]["speed"] == 0.9
-    assert sent["input"]["text"].startswith("Line 0 of v0 Line 1 of v0")
+    # 預設配音模型是 Gemini：帳號檔案綁的 ElevenLabs 音色換成 Gemini 預設音色，語速用文字描述
+    assert sent["model"] == "google/gemini-3-8-flash-tts"
+    assert sent["input"]["speakers"] == [{"speaker_id": "Speaker 1", "voice_name": "Kore"}]
+    turn = sent["input"]["dialogue_turns"][0]
+    assert turn["text"].startswith("Line 0 of v0 Line 1 of v0")
+    assert "slightly slow" in turn["style"] and "commercial voiceover" in turn["style"]
 
 
 def test_migration_adds_tts_models_to_existing_kie_channel(admin, db):
@@ -283,7 +318,10 @@ def test_migration_adds_tts_models_to_existing_kie_channel(admin, db):
     models = db.scalars(
         select(ChannelModel).where(ChannelModel.channel_id == channel["id"], ChannelModel.capability == "tts").order_by(ChannelModel.created_at)
     ).all()
+    # 0005 補上 ElevenLabs，0007 再補上 Gemini 並改成預設
     assert [(m.model_key, m.is_default) for m in models] == [
-        ("elevenlabs/text-to-speech-multilingual-v2", True),
+        ("elevenlabs/text-to-speech-multilingual-v2", False),
         ("elevenlabs/text-to-speech-turbo-2-5", False),
+        ("google/gemini-3-8-flash-tts", True),
+        ("google/gemini-3-8-flash-lite-tts", False),
     ]

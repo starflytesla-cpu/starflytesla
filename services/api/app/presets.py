@@ -69,10 +69,20 @@ PRESETS: dict[str, dict] = {
                 "is_default": True,
             },
             {
+                "model_key": "google/gemini-3-8-flash-tts",
+                "display_name": "Gemini 3.8 Flash TTS",
+                "capability": "tts",
+                "is_default": True,
+            },
+            {
+                "model_key": "google/gemini-3-8-flash-lite-tts",
+                "display_name": "Gemini 3.8 Flash Lite TTS（較便宜）",
+                "capability": "tts",
+            },
+            {
                 "model_key": "elevenlabs/text-to-speech-multilingual-v2",
                 "display_name": "ElevenLabs Multilingual v2",
                 "capability": "tts",
-                "is_default": True,
             },
             {
                 "model_key": "elevenlabs/text-to-speech-turbo-2-5",

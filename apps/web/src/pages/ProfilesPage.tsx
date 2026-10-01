@@ -20,9 +20,9 @@ import {
   Typography,
 } from 'antd'
 import { useState } from 'react'
-import { api, type Profile, type ProfileInput } from '../api'
+import { api, VOICE_ENGINES, type Profile, type ProfileInput, type VoiceEngine } from '../api'
 import { ApiError } from '../api/http'
-import AudioButton from '../components/AudioButton'
+import VoicePlayButton from '../components/VoicePlayButton'
 import PageHeader from '../components/PageHeader'
 
 const TONE_SUGGESTIONS = ['專業可靠', '親切熱情', '幽默輕鬆', '自信直接', '溫暖有人情味'].map((value) => ({ value }))
@@ -132,7 +132,10 @@ function ProfileDrawer({
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [form] = Form.useForm<ProfileInput>()
-  const { data: voices } = useQuery({ queryKey: ['voices'], queryFn: api.voices, staleTime: Infinity, enabled: !!target })
+  const { data: voiceData } = useQuery({ queryKey: ['voices'], queryFn: api.voices, enabled: !!target })
+  const voices = voiceData?.items
+  const active = voiceData?.active_engine ?? 'gemini'
+  const engines = (Object.keys(VOICE_ENGINES) as VoiceEngine[]).sort((a) => (a === active ? -1 : 1))
   const voiceId = Form.useWatch('voice_id', form)
   const selectedVoice = voices?.find((v) => v.id === voiceId)
 
@@ -216,7 +219,7 @@ function ProfileDrawer({
         <Form.Item name="banned_words" label="禁用詞" extra="例如沒有取得的認證、競品名稱、誇大用語；AI 文案出現時會提醒">
           <Select mode="tags" open={false} tokenSeparators={[',', '，']} />
         </Form.Item>
-        <Form.Item label="配音音色" htmlFor="profile-voice" extra="可以到「音色管理」試聽更多音色">
+        <Form.Item label="配音音色" htmlFor="profile-voice" extra="請選「目前使用中」引擎的音色；可以到「音色管理」試聽">
           <Space.Compact className="full-width">
             <Form.Item name="voice_id" noStyle>
               <Select
@@ -225,19 +228,16 @@ function ProfileDrawer({
                 allowClear
                 optionFilterProp="label"
                 placeholder="選擇音色"
-                options={[
-                  {
-                    label: '推薦旁白',
-                    options: (voices ?? []).filter((v) => v.recommended).map((v) => ({ value: v.id, label: `${v.name} · ${v.description}` })),
-                  },
-                  {
-                    label: '其他',
-                    options: (voices ?? []).filter((v) => !v.recommended).map((v) => ({ value: v.id, label: `${v.name} · ${v.description}` })),
-                  },
-                ]}
+                options={engines.map((engine) => ({
+                  label: `${VOICE_ENGINES[engine]}${engine === active ? '（目前使用中）' : ''}`,
+                  options: (voices ?? [])
+                    .filter((v) => v.engine === engine)
+                    .sort((a, b) => Number(b.recommended) - Number(a.recommended))
+                    .map((v) => ({ value: v.id, label: `${v.name} · ${v.description}${v.recommended ? ' ★' : ''}` })),
+                }))}
               />
             </Form.Item>
-            {selectedVoice ? <AudioButton url={selectedVoice.preview_url} /> : null}
+            {selectedVoice ? <VoicePlayButton voice={selectedVoice} /> : null}
           </Space.Compact>
         </Form.Item>
         <Form.Item name="voice_speed" label="配音語速">

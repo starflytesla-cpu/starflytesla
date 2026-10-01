@@ -1,7 +1,7 @@
 """所有 AI 呼叫的唯一入口：選模型、發請求、解析用量、估算成本、寫入 usage_ledger。
 
 - chat()：OpenAI 相容的 /chat/completions（DeepSeek、豆包 BytePlus、OpenRouter、kie.ai 的 Gemini）
-- tts()：文字轉語音（目前支援 kie.ai 的 ElevenLabs，建立任務後輪詢結果）
+- tts()：文字轉語音（kie.ai 的 Gemini 3.8 Flash TTS 與 ElevenLabs，建立任務後輪詢結果）
 
 kie.ai 的差異在 _kie_* 函式處理：每個聊天模型有自己的網址路徑、圖片要先上傳成網址、以點數計費。
 不論成功或失敗都會寫一筆成本記錄。
@@ -43,6 +43,18 @@ class TtsResult:
     characters: int
     duration_ms: int
     cost_micros: int | None
+    # 依檔案內容判斷的副檔名（.mp3 / .wav / .ogg / .m4a）
+    extension: str = ".mp3"
+
+
+def audio_extension(data: bytes) -> str:
+    if data[:4] == b"RIFF":
+        return ".wav"
+    if data[:4] == b"OggS":
+        return ".ogg"
+    if data[4:8] == b"ftyp":
+        return ".m4a"
+    return ".mp3"
 
 
 def estimate_cost_micros(model: ChannelModel, input_tokens: int, output_tokens: int) -> int | None:
@@ -267,7 +279,42 @@ TTS_TIMEOUT_SECONDS = 180.0
 MAX_AUDIO_BYTES = 30 * 1024 * 1024
 
 
-def _kie_tts(model: ChannelModel, api_key: str, text: str, voice_id: str, speed: float) -> tuple[bytes, object]:
+def _gemini_pace(speed: float) -> str:
+    if speed >= 1.12:
+        return "Speak at a brisk, fast pace."
+    if speed >= 1.04:
+        return "Speak at a slightly fast pace."
+    if speed <= 0.85:
+        return "Speak slowly and clearly."
+    if speed <= 0.95:
+        return "Speak at a relaxed, slightly slow pace."
+    return ""
+
+
+def _tts_input(model: ChannelModel, text: str, voice_id: str, speed: float, style: str) -> dict:
+    """依模型組 kie 的 input：Gemini TTS 用對話格式（沒有語速參數，改用 style 文字描述）；ElevenLabs 用 text + voice。"""
+    if model.model_key.startswith("google/gemini"):
+        turn = {"speaker_id": "Speaker 1", "text": text}
+        full_style = " ".join(part for part in (style.strip(), _gemini_pace(speed)) if part)
+        if full_style:
+            turn["style"] = full_style
+        return {
+            "temperature": 1,
+            "speakers": [{"speaker_id": "Speaker 1", "voice_name": voice_id}],
+            "dialogue_turns": [turn],
+        }
+    return {
+        "text": text,
+        "voice": voice_id,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0,
+        "speed": min(max(speed, 0.7), 1.2),
+        "timestamps": False,
+    }
+
+
+def _kie_tts(model: ChannelModel, api_key: str, text: str, voice_id: str, speed: float, style: str) -> tuple[bytes, object]:
     """kie.ai Market 任務：createTask → 輪詢 recordInfo → 下載音檔。回傳 (音檔, 消耗點數)。"""
     base_url = validate_upstream_url(model.channel.base_url)
     created = _json(
@@ -275,18 +322,7 @@ def _kie_tts(model: ChannelModel, api_key: str, text: str, voice_id: str, speed:
             "POST",
             f"{base_url}/api/v1/jobs/createTask",
             api_key,
-            {
-                "model": model.model_key,
-                "input": {
-                    "text": text,
-                    "voice": voice_id,
-                    "stability": 0.5,
-                    "similarity_boost": 0.75,
-                    "style": 0,
-                    "speed": min(max(speed, 0.7), 1.2),
-                    "timestamps": False,
-                },
-            },
+            {"model": model.model_key, "input": _tts_input(model, text, voice_id, speed, style)},
         )
     )
     task_id = (created.get("data") or {}).get("taskId") if created.get("code") == 200 else None
@@ -328,10 +364,11 @@ def tts(
     voice_id: str,
     *,
     speed: float = 1.0,
+    style: str = "",
     source: str,
     user: User | None,
 ) -> TtsResult:
-    """產生配音（mp3）。成本記錄的 input_tokens 欄位存字元數。"""
+    """產生配音。style 是給 Gemini TTS 的語氣描述（ElevenLabs 不使用）。成本記錄的 input_tokens 欄位存字元數。"""
     if model.capability != "tts":
         raise bad_request("這個模型不是配音模型", "unsupported_capability")
     if model.channel.provider != "kie":
@@ -342,7 +379,7 @@ def tts(
     api_key = _check_usable(model)
 
     with _ledger(db, model, "ai.tts", source, user) as entry:
-        audio, credits = _kie_tts(model, api_key, text, voice_id, speed)
+        audio, credits = _kie_tts(model, api_key, text, voice_id, speed, style)
         entry.input_tokens = len(text)
         entry.cost_micros = credits_to_micros(credits) if credits is not None else None
-    return TtsResult(audio, len(text), entry.duration_ms, entry.cost_micros)
+    return TtsResult(audio, len(text), entry.duration_ms, entry.cost_micros, audio_extension(audio))

@@ -1,7 +1,11 @@
-"""ElevenLabs 預設音色（經 kie.ai 使用）。清單取自 kie.ai 文件 elevenlabs/text-to-speech-multilingual-v2。
+"""配音音色（經 kie.ai 使用），分兩種引擎：
 
-試聽檔由 kie.ai 免費提供（不扣點數）：https://static.aiquickdraw.com/elevenlabs/voice/<voice_id>.mp3
+- elevenlabs：清單取自 kie.ai 文件 elevenlabs/text-to-speech-multilingual-v2，以 voice ID 指定；
+  試聽檔由 kie.ai 免費提供：https://static.aiquickdraw.com/elevenlabs/voice/<voice_id>.mp3
+- gemini：清單取自 kie.ai 文件 google/gemini-3-8-flash-tts，以名稱指定；沒有官方試聽檔，第一次試聽時產生並快取。
+
 recommended：適合產品 / 工廠短影音旁白的音色，前端預設只顯示這些。
+帳號檔案存的音色和目前的配音模型不同引擎時，用 resolve_voice 換成該引擎的預設音色。
 """
 
 from dataclasses import dataclass
@@ -15,6 +19,7 @@ class Voice:
     name: str
     description: str
     recommended: bool = False
+    engine: str = "elevenlabs"
 
     def out(self) -> dict:
         return {
@@ -22,7 +27,8 @@ class Voice:
             "name": self.name,
             "description": self.description,
             "recommended": self.recommended,
-            "preview_url": PREVIEW_URL.format(voice_id=self.id),
+            "engine": self.engine,
+            "preview_url": PREVIEW_URL.format(voice_id=self.id) if self.engine == "elevenlabs" else None,
         }
 
 
@@ -96,4 +102,37 @@ VOICES: list[Voice] = [
     Voice("MJ0RnG71ty4LH3dvNfSd", "Leon", "Soothing and Grounded"),
 ]
 
-VOICES_BY_ID = {v.id: v for v in VOICES}
+# Gemini 3.8 Flash TTS 的 70 個音色（依 kie.ai 文件的用途分類）
+GEMINI_CATEGORIES = {
+    "商業旁白": ["Koda", "Kore", "Nika", "Tavi", "Zeno"],
+    "專業": ["Cruz", "Elio", "Gacrux", "Pulcherrima", "Schedar", "Tova", "Zuri"],
+    "Podcast": ["Alnilam", "Brio", "Jori", "Laomedeia", "Rami", "Veda"],
+    "說故事": ["Achird", "Enzo", "Riko", "Sami", "Zali", "Zubenelgenubi"],
+    "教學": ["Bodi", "Lumi", "Sadaltager", "Sola", "Sulafat", "Varo", "Zephyr"],
+    "講解說明": ["Algenib", "Despina", "Erinome", "Kira", "Ludo", "Mako", "Rasalgethi", "Rina"],
+    "數位助理": ["Algieba", "Aoede", "Autonoe", "Callirrhoe", "Enceladus", "Gero", "Iapetus", "Neno", "Olin", "Tari", "Umbriel"],
+    "客服": ["Achernar", "Charon", "Daro", "Fola", "Hali", "Milo", "Puck"],
+    "禮賓接待": ["Arlo", "Cleo", "Fenrir", "Finn", "Leda", "Lora", "Orus"],
+    "技術支援": ["Enya", "Jett", "Knox", "Nyla", "Sadachbia", "Vindemiatrix"],
+}
+GEMINI_RECOMMENDED = {"商業旁白", "專業", "Podcast"}
+GEMINI_VOICES: list[Voice] = [
+    Voice(name, name, category, recommended=category in GEMINI_RECOMMENDED, engine="gemini")
+    for category, names in GEMINI_CATEGORIES.items()
+    for name in names
+]
+
+ALL_VOICES = VOICES + GEMINI_VOICES
+VOICES_BY_ID = {v.id: v for v in ALL_VOICES}
+DEFAULT_VOICE = {"elevenlabs": "TX3LPaxmHKxFdv7VOQHJ", "gemini": "Kore"}
+
+
+def engine_for_model(model_key: str) -> str:
+    return "gemini" if model_key.startswith("google/gemini") else "elevenlabs"
+
+
+def resolve_voice(model_key: str, voice_id: str) -> str:
+    """回傳這個配音模型能用的音色：同引擎就用原本的，否則用該引擎的預設音色。"""
+    engine = engine_for_model(model_key)
+    voice = VOICES_BY_ID.get(voice_id)
+    return voice_id if voice and voice.engine == engine else DEFAULT_VOICE[engine]

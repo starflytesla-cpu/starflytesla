@@ -1,6 +1,6 @@
 """混剪渲染（worker 任務 video.render）：已核准文案 → 時間軸 → 1080x1920 成片。
 
-1. 每個鏡頭的配音稿用帳號檔案的音色產生配音（相同文字 + 音色會重用快取，不重複扣點數）
+1. 每個鏡頭的配音稿用帳號檔案的音色產生配音（speech.cached_tts：相同文字 + 音色會重用快取，不重複扣點數）
 2. 鏡頭長度 = 配音長度 + 0.35 秒；沒有配音稿時用模板建議秒數
 3. 依期望畫面類型、標籤、畫面品質、近期使用次數與隨機數為每個鏡頭挑素材片段（不夠長就接下一段）
 4. 每段素材正規化 → 串接 → 燒入 ASS 字幕（上方大字幕 + 下方逐句字幕）→ 與配音、壓低的環境音混音
@@ -8,7 +8,6 @@
 同一份文案產生多支成片時，每支用不同的隨機種子：挑到的素材、片段起點、放大比例、字幕樣式都不同（矩陣號差異化）。
 """
 
-import hashlib
 import logging
 import random
 import re
@@ -23,9 +22,8 @@ from sqlalchemy.orm import Session
 
 from app.errors import AppError
 from app.models import Asset, BrandProfile, Clip, Script, Task, UsageLedger, User, Video, utcnow
-from app.services import ai_provider, media
+from app.services import ai_provider, media, speech
 from app.services.tasks import will_retry
-from app.services.voices import VOICES_BY_ID
 
 log = logging.getLogger("starfly.renderer")
 
@@ -69,23 +67,6 @@ def video_dir(tenant_id: str, video_id: str) -> Path:
 def _set_stage(db: Session, video: Video, stage: str) -> None:
     video.stage = stage
     db.commit()
-
-
-# ---------------------------------------------------------------- 配音（含快取）
-def tts_cached(
-    db: Session, user: User | None, model, tenant_id: str, text: str, voice_id: str, speed: float
-) -> tuple[str, float]:
-    """回傳 (相對 MEDIA_ROOT 的路徑, 秒數)。同樣的文字、音色、語速、模型只產生一次。"""
-    key = hashlib.sha256(f"{model.model_key}|{voice_id}|{speed:.2f}|{text}".encode()).hexdigest()[:40]
-    rel = Path(tenant_id) / "tts-cache" / f"{key}.mp3"
-    path = media.media_root() / rel
-    if not path.exists():
-        result = ai_provider.tts(db, model, text, voice_id, speed=speed, source="video_render", user=user)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(result.audio)
-        tmp.replace(path)
-    return str(rel), media.audio_duration(path)
 
 
 # ---------------------------------------------------------------- 挑素材
@@ -223,8 +204,6 @@ def segment_for_clip(db: Session, tenant_id: str, clip_id: str, need: float) -> 
 def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfile | None) -> dict:
     options = video.options or {}
     rng = random.Random(options.get("seed") or video.id)
-    voice_id = profile.voice_id if profile and profile.voice_id in VOICES_BY_ID else next(iter(VOICES_BY_ID))
-    speed = profile.voice_speed if profile else 1.0
     style = options.get("style") or "random"
     if style not in STYLES:
         style = rng.choice(sorted(STYLES))
@@ -234,6 +213,7 @@ def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfi
     if not pool:
         raise RenderError("素材庫沒有可用的鏡頭，請先上傳並分析素材", retryable=False)
     tts_model = ai_provider.default_model(db, video.tenant_id, "tts")
+    voice_id, speed, voice_style = speech.profile_voice(tts_model, profile)
     usage = usage_counts(db, video.tenant_id, exclude_video=video.id)
 
     shots = []
@@ -242,7 +222,9 @@ def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfi
         audio, voice_len = None, 0.0
         if text:
             _set_stage(db, video, f"產生配音 {i + 1}/{len(script.shots)}")
-            audio, voice_len = tts_cached(db, creator, tts_model, video.tenant_id, text, voice_id, speed)
+            audio, voice_len = speech.cached_tts(
+                db, creator, tts_model, video.tenant_id, text, voice_id, speed, voice_style, source="video_render"
+            )
         duration = round(max(voice_len + VOICE_PAD, MIN_SHOT) if text else float(shot.get("seconds") or 3), 3)
         shots.append(
             {
@@ -266,6 +248,7 @@ def plan_timeline(db: Session, video: Video, script: Script, profile: BrandProfi
         "height": media.OUT_H,
         "fps": media.OUT_FPS,
         "language": script.language,
+        "tts_model": tts_model.model_key,
         "voice_id": voice_id,
         "voice_speed": speed,
         "style": style,

@@ -11,7 +11,7 @@
 
 - 目標平台：**海外**（TikTok / Instagram Reels / YouTube Shorts / Facebook Reels），發佈先接 Upload-Post API。
 - 商業模式：先自營服務自己的客戶，從**一個帳號群**開始；之後打包銷售或改積分制，所以每個 AI / 渲染 / 發佈動作都要記錄成本（`usage_ledger`）。
-- AI：文案用 DeepSeek，看圖打標籤用 kie.ai 的 Gemini 3.8 Flash（使用者 2026-10-01 指定；豆包 Seed Vision 為備選），配音用 kie.ai（ElevenLabs），備援用 OpenRouter。
+- AI：文案用 DeepSeek，看圖打標籤用 kie.ai 的 Gemini 3.8 Flash（使用者 2026-10-01 指定；豆包 Seed Vision 為備選），配音用 kie.ai 的 Gemini 3.8 Flash TTS（使用者 2026-10-01 指定；ElevenLabs 經 kie 出現 Internal Error，保留為備選），備援用 OpenRouter。
 - 成片和 AI 評論回覆**都要人工確認**後才發出。
 - 技術棧：FastAPI + PostgreSQL（pgvector）+ FFmpeg；前端 React + Vite + Ant Design（手機優先 PWA）；Caddy 提供網頁與 HTTPS；Docker Compose 部署在單台 VPS。不使用 Redis 與 MinIO（見 docs/02-architecture.md 開頭）。
 
@@ -30,7 +30,7 @@
 - **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。kie.ai 的特殊處理也在這裡：網址是 `{base}/{model_key}/v1/chat/completions`、預設串流要關掉、圖片要先經 kie 檔案上傳 API 換成網址。
 - 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
 - 背景任務：`app/services/tasks.py` 的 `enqueue` 排入 `tasks` 表，`app/worker.py`（`worker` 容器）領取執行；新任務類型在 `HANDLERS` 註冊。FFmpeg 呼叫集中在 `app/services/media.py`。
-- 文案：`script_writer.py`（worker 任務 `script.generate`）組 prompt 與解析；內建模板在 `template_library.py`（改完重新部署即同步）；音色清單在 `voices.py`；配音試聽在 `speech.py`（`ai_provider.tts`）。
+- 文案：`script_writer.py`（worker 任務 `script.generate`）組 prompt 與解析；內建模板在 `template_library.py`（改完重新部署即同步）；音色清單在 `voices.py`（Gemini 與 ElevenLabs 兩種引擎，`resolve_voice` 依配音模型換成可用音色）；試聽、音色樣本、成片配音快取都在 `speech.py`（`ai_provider.tts`）。
 - 成片：`renderer.py`（worker 任務 `video.render`）負責挑素材、配音快取、ASS 字幕與渲染；API 邏輯在 `videos.py`；任務中心在 `task_center.py`。渲染用的 FFmpeg 指令同樣集中在 `media.py`。
 - 素材檔案在 `MEDIA_ROOT`（容器內 `/media`），網址 `/media/{tenant}/assets|videos/{id}/...` 與 `/media/{tenant}/tts/...` 由 Caddy 經 `/api/media/auth` 檢查權限後直接提供。場景分類代碼在 `asset_analyzer.SCENES`，前端 `SCENE_LABELS` 要同步。
 - `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫（唯一例外：上傳用 `src/api/upload.ts` 的 tus-js-client）；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。

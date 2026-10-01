@@ -2,10 +2,10 @@ import { SoundOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Col, Empty, Form, Input, Modal, Row, Segmented, Select, Slider, Space, Tag, Typography } from 'antd'
 import { useMemo, useState } from 'react'
-import { api, formatUsd, type Voice } from '../api'
+import { api, formatUsd, VOICE_ENGINES, type Voice, type VoiceEngine } from '../api'
 import { ApiError } from '../api/http'
 import { playAudio } from '../audio'
-import AudioButton from '../components/AudioButton'
+import VoicePlayButton from '../components/VoicePlayButton'
 import PageHeader from '../components/PageHeader'
 
 const SAMPLE_TEXT =
@@ -14,7 +14,11 @@ const SAMPLE_TEXT =
 export default function VoicesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  const { data: voices, isPending } = useQuery({ queryKey: ['voices'], queryFn: api.voices, staleTime: Infinity })
+  const { data: voiceData, isPending } = useQuery({ queryKey: ['voices'], queryFn: api.voices })
+  const voices = voiceData?.items
+  const active = voiceData?.active_engine ?? null
+  const [engine, setEngine] = useState<VoiceEngine | null>(null)
+  const currentEngine: VoiceEngine = engine ?? active ?? 'gemini'
   const { data: profileData } = useQuery({ queryKey: ['profiles'], queryFn: api.profiles })
   const [scope, setScope] = useState<'recommended' | 'all'>('recommended')
   const [keyword, setKeyword] = useState('')
@@ -25,10 +29,11 @@ export default function VoicesPage() {
     const q = keyword.trim().toLowerCase()
     return (voices ?? []).filter(
       (v) =>
+        v.engine === currentEngine &&
         (scope === 'all' || v.recommended) &&
         (!q || v.name.toLowerCase().includes(q) || v.description.toLowerCase().includes(q)),
     )
-  }, [voices, scope, keyword])
+  }, [voices, scope, keyword, currentEngine])
 
   const bind = useMutation({
     mutationFn: ({ profileId, voiceId }: { profileId: string; voiceId: string }) =>
@@ -44,15 +49,34 @@ export default function VoicesPage() {
     <>
       <PageHeader
         title="音色管理"
-        subtitle="試聽 ElevenLabs 音色並綁定到帳號檔案；預設試聽免費，用自訂文字試聽會扣 kie.ai 點數"
+        subtitle="試聽音色並綁定到帳號檔案。ElevenLabs 試聽免費；Gemini 第一次試聽會產生一段樣本（約 US$0.001）；自訂文字試聽會扣 kie.ai 點數"
       />
+      {active ? (
+        <Alert
+          className="section"
+          type="info"
+          showIcon
+          title={`目前成片配音使用 ${VOICE_ENGINES[active]} 音色`}
+          description="帳號檔案綁定的音色如果不是這個引擎，產生成片時會自動改用該引擎的預設音色（Gemini：Kore）。要切換引擎，請到「模型渠道」把想用的配音模型設為預設（星號）。"
+        />
+      ) : (
+        <Alert className="section" type="warning" showIcon title="尚未設定配音模型，請到「模型渠道」新增 kie.ai 渠道" />
+      )}
       <div className="asset-filters section">
+        <Segmented
+          value={currentEngine}
+          onChange={(v) => setEngine(v as VoiceEngine)}
+          options={(Object.keys(VOICE_ENGINES) as VoiceEngine[]).map((key) => ({
+            value: key,
+            label: key === active ? `${VOICE_ENGINES[key]}（使用中）` : VOICE_ENGINES[key],
+          }))}
+        />
         <Segmented
           value={scope}
           onChange={(v) => setScope(v as 'recommended' | 'all')}
           options={[
             { value: 'recommended', label: '推薦旁白' },
-            { value: 'all', label: `全部（${voices?.length ?? 0}）` },
+            { value: 'all', label: `全部（${(voices ?? []).filter((v) => v.engine === currentEngine).length}）` },
           ]}
         />
         <Input.Search placeholder="搜尋名稱或風格，例如 warm" allowClear onSearch={setKeyword} className="asset-search" />
@@ -66,7 +90,7 @@ export default function VoicesPage() {
             <Col key={voice.id} xs={24} sm={12} lg={8} xl={6}>
               <Card size="small" className="voice-card">
                 <div className="voice-head">
-                  <AudioButton url={voice.preview_url} shape="circle" type="primary" />
+                  <VoicePlayButton voice={voice} shape="circle" type="primary" />
                   <div className="voice-meta">
                     <Typography.Text strong>{voice.name}</Typography.Text>
                     <Typography.Text type="secondary" className="small">
