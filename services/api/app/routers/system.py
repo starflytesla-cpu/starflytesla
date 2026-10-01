@@ -6,6 +6,7 @@ from app.errors import AppError
 from app.models import ChannelModel, ModelChannel, User
 from app.routers.usage import month_summary
 from app.schemas import ok
+from app.services.assets import stats as asset_stats
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -41,6 +42,7 @@ def dashboard(user: CurrentUser, db: DB):
             select(func.count()).select_from(ModelChannel).where(ModelChannel.tenant_id == tenant_id)
         ),
         "ready_capabilities": sorted(capabilities),
+        "assets": asset_stats(db, tenant_id),
         "month": month_summary(db, tenant_id) if user.role == "admin" else None,
     }
     return ok(data)

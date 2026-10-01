@@ -1,5 +1,5 @@
 # 在正式伺服器執行維運指令（見 infra/scripts/ops.sh）。
-# - 手動執行：Actions → Ops → Run workflow，輸入指令（status / smoke / logs api 200 / deploy / restart api）
+# - 手動執行：Actions → Ops → Run workflow，輸入指令（status / smoke / queue / logs api 200 / deploy / restart api）
 # - 自動部署：CI 在 claude/exciting-fermi-nad1gj 分支通過後，自動執行 deploy
 # 伺服器端的金鑰被鎖定成只能執行 ops.sh，這裡送出的指令會在伺服器上再驗證一次。
 name: Ops
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "指令：status / smoke / logs api 200 / deploy / restart api"
+        description: "指令：status / smoke / queue / logs api 200 / logs worker 200 / deploy / restart worker"
         required: true
         default: status
   workflow_run:

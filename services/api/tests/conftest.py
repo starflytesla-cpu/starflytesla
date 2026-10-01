@@ -1,5 +1,7 @@
 import os
+import shutil
 import socket
+import tempfile
 
 import pytest
 
@@ -11,6 +13,9 @@ os.environ.setdefault(
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["ADMIN_EMAIL"] = "admin@example.com"
 os.environ["ADMIN_PASSWORD"] = "admin-password"
+MEDIA_ROOT = tempfile.mkdtemp(prefix="starfly-media-")
+os.environ["MEDIA_ROOT"] = MEDIA_ROOT
+os.environ["MIN_FREE_BYTES"] = "0"
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
@@ -38,9 +43,11 @@ def _migrate():
 def _clean_db():
     with get_engine().begin() as conn:
         conn.execute(
-            text("TRUNCATE usage_ledger, channel_models, model_channels, users, tenants CASCADE")
+            text("TRUNCATE tasks, clips, assets, uploads, usage_ledger, channel_models, model_channels, users, tenants CASCADE")
         )
     login_limiter._failures.clear()
+    shutil.rmtree(MEDIA_ROOT, ignore_errors=True)
+    os.makedirs(MEDIA_ROOT)
     yield
 
 

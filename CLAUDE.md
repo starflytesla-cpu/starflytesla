@@ -29,8 +29,10 @@
 - API 回應一律是 `{code, data, msg, reason}`：成功用 `schemas.ok()`；失敗丟 `app.errors` 的 `AppError`，HTTP status 要反映真實失敗，`msg` 是可直接顯示的繁體中文。
 - **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。
 - 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
-- `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
-- 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
+- 背景任務：`app/services/tasks.py` 的 `enqueue` 排入 `tasks` 表，`app/worker.py`（`worker` 容器）領取執行；新任務類型在 `HANDLERS` 註冊。FFmpeg 呼叫集中在 `app/services/media.py`。
+- 素材檔案在 `MEDIA_ROOT`（容器內 `/media`），網址 `/media/{tenant}/assets/{asset}/...` 由 Caddy 經 `/api/media/auth` 檢查權限後直接提供。場景分類代碼在 `asset_analyzer.SCENES`，前端 `SCENE_LABELS` 要同步。
+- `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫（唯一例外：上傳用 `src/api/upload.ts` 的 tus-js-client）；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
+- 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫與 ffmpeg）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
 
 ## 正式伺服器
 
@@ -44,7 +46,7 @@
 雲端開發環境不能直接 SSH 到伺服器，改用 `.github/workflows/ops.yml`：
 
 - 用 GitHub MCP 的 `actions_run_trigger`（`run_workflow`，workflow `ops.yml`，ref `claude/exciting-fermi-nad1gj`，inputs `{"command": "..."}`）觸發，再用 `actions_list` / `get_job_logs` 讀結果。
-- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`logs <api|web|postgres> [行數]`、`deploy`、`restart <api|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
+- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`queue`（任務佇列 / 素材狀態 / 最近錯誤）、`logs <api|worker|web|postgres> [行數]`、`deploy`、`restart <api|worker|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
 - 推送到 `claude/exciting-fermi-nad1gj` 且 CI 通過後，Ops 會自動執行 `deploy`（部署完會跑 `smoke`）。
 - 需要使用者先在伺服器執行 `setup-ops.sh` 並設定 `OPS_HOST` / `OPS_KNOWN_HOSTS` / `OPS_SSH_KEY` 三個 Secrets；未設定時 workflow 會顯示警告並略過。
 - 這台伺服器的主機商模板預設**關閉金鑰登入**（回應 `Permission denied (password)`），需在伺服器執行 `bash infra/scripts/enable-ssh-key.sh` 開啟（2026-09-30 已請使用者執行）。
@@ -84,5 +86,6 @@
 - [x] Phase 0 部署到正式伺服器（2026-09-30）
 - [x] 登入卡住（使用者代理造成）與伺服器連外問題已解決，維運通道自動部署正常（2026-09-30）
 - [ ] 用真實 API Key 測試 DeepSeek 與豆包
-- [ ] Phase 1：素材中心
+- [x] Phase 1 素材中心程式完成（2026-10-01）：tus 斷點續傳、worker（轉檔 / 切鏡頭 / 看圖模型標籤 / 重複偵測）、素材庫頁面
+- [ ] Phase 1 部署後驗收：使用者用手機實際上傳工廠影片，並設定豆包看圖模型
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP

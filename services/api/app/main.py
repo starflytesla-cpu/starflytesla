@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db import get_sessionmaker
 from app.errors import AppError
-from app.routers import auth, channels, system, usage, users
+from app.routers import assets, auth, channels, media, system, uploads, usage, users
 from app.services.bootstrap import ensure_initial_admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -57,5 +57,5 @@ async def unhandled_error_handler(request: Request, exc: Exception):
     return _error(500, "internal_error", "系統處理失敗，請稍後再試")
 
 
-for module in (system, auth, users, channels, usage):
+for module in (system, auth, users, channels, usage, uploads, assets, media):
     app.include_router(module.router)

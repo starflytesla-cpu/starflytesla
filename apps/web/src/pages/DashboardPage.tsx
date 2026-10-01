@@ -78,10 +78,36 @@ export default function DashboardPage() {
         </Row>
       ) : null}
 
+      <Row gutter={[16, 16]} className="section">
+        <Col xs={12} md={6}>
+          <Card loading={isPending} hoverable onClick={() => navigate('/assets')}>
+            <Statistic title="素材" value={data?.assets.total ?? 0} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card loading={isPending} hoverable onClick={() => navigate('/assets')}>
+            <Statistic title="可用鏡頭" value={data?.assets.clips ?? 0} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card loading={isPending} hoverable onClick={() => navigate('/assets')}>
+            <Statistic
+              title="分析中"
+              value={(data?.assets.by_status.uploaded ?? 0) + (data?.assets.by_status.processing ?? 0)}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card loading={isPending} hoverable onClick={() => navigate('/assets')}>
+            <Statistic title="分析失敗" value={data?.assets.by_status.failed ?? 0} />
+          </Card>
+        </Col>
+      </Row>
+
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
           <Card title="開發進度">
-            <Steps orientation="vertical" size="small" current={1} items={PHASES} />
+            <Steps orientation="vertical" size="small" current={2} items={PHASES} />
           </Card>
         </Col>
         <Col xs={24} lg={10}>

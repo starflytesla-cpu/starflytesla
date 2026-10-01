@@ -3,7 +3,7 @@
 {$SITE_ADDRESS::80} {
 	encode zstd gzip
 
-	# 預留給 Phase 1 的影片上傳
+	# 素材上傳（前端以 8 MB 分段續傳，這裡是單一請求的上限）
 	request_body {
 		max_size 2GB
 	}
@@ -16,7 +16,27 @@
 	}
 
 	handle /api/* {
-		reverse_proxy api:8000
+		reverse_proxy api:8000 {
+			# 上傳分段可能要傳一段時間，不要因為慢速網路被切斷
+			transport http {
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	# 素材檔案：先由 API 檢查登入與租戶，通過才從唯讀的 media volume 回傳（支援影片拖曳的 Range 請求）
+	# route 讓指令依寫的順序執行：先用原始路徑檢查權限，再去掉 /media 前綴找檔案
+	handle /media/* {
+		route {
+			forward_auth api:8000 {
+				uri /api/media/auth
+			}
+			uri strip_prefix /media
+			root * /media
+			header Cache-Control "private, max-age=86400"
+			file_server
+		}
 	}
 
 	# Vite 產出的檔名含內容雜湊，可以長期快取

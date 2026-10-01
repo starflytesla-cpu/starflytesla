@@ -5,6 +5,12 @@
 > - **AI 渠道的 API Key 在後台網頁填寫**，加密後存進資料庫，不放在 `.env`。
 > - **不使用 Redis**：背景任務改用 PostgreSQL 任務表（`SELECT … FOR UPDATE SKIP LOCKED` 領取），少一個服務，任務也不會因重啟而遺失。Phase 1 實作。
 > - **不使用 MinIO**：社群版映像已從 Docker Hub 下架。素材先存在伺服器資料碟（`/data`），量大後再改接 Cloudflare R2 等 S3 相容服務。
+>
+> **Phase 1 實作後的調整（2026-10-01）**
+> - **不另外架 tusd**：tus 1.0 端點直接寫在 FastAPI（`/api/uploads`），前端用 tus-js-client 每段 8 MB 上傳，斷線自動續傳。
+> - **worker** 是獨立容器（與 API 同一份程式碼，`python -m app.worker`），從 `tasks` 表領任務；執行中每 30 秒延長租約，當機 2 分鐘後任務會被重新領取；部署時收到停止訊號會中止 FFmpeg 並把任務放回佇列。
+> - **素材檔案**放在 Docker volume `media`（位於資料碟），網頁讀取 `/media/...` 時由 Caddy 先呼叫 `/api/media/auth` 檢查登入與租戶，通過才直接回傳檔案（支援影片拖曳的 Range 請求）。
+> - 資料表：`uploads`（上傳中）、`assets`（素材）、`clips`（鏡頭）、`tasks`（背景任務）。
 
 ## 1. 總覽
 

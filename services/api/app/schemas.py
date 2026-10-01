@@ -144,3 +144,23 @@ def _num(value: Decimal | None) -> float | None:
 
 def micros_to_usd(value: int | None) -> float | None:
     return None if value is None else round(value / 1_000_000, 6)
+
+
+# ---------------------------------------------------------------- 素材中心
+Quality = Literal["good", "ok", "poor", ""]
+TagList = Annotated[list[Annotated[str, Field(min_length=1, max_length=20)]], Field(max_length=12)]
+
+
+class AssetUpdateIn(BaseModel):
+    category: str | None = Field(default=None, max_length=32)
+    note: str | None = Field(default=None, max_length=500)
+    is_disabled: bool | None = None
+
+
+class ClipUpdateIn(BaseModel):
+    scene: str | None = Field(default=None, max_length=32)
+    subjects: TagList | None = None
+    tags: TagList | None = None
+    description: str | None = Field(default=None, max_length=200)
+    quality: Quality | None = None
+    is_disabled: bool | None = None

@@ -3,6 +3,11 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
+# 素材分析（轉檔、切鏡頭、擷取畫面）需要 FFmpeg
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
@@ -10,7 +15,8 @@ COPY alembic.ini .
 COPY migrations ./migrations
 COPY app ./app
 
-RUN useradd --system --uid 10001 starfly
+# /media 掛載素材 volume；第一次建立 volume 時會沿用這裡的擁有者
+RUN useradd --system --uid 10001 starfly && install -d -o starfly -g starfly /media
 USER starfly
 
 EXPOSE 8000

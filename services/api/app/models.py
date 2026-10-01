@@ -3,10 +3,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -138,3 +141,135 @@ class UsageLedger(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
+
+
+# ---------------------------------------------------------------- Phase 1 素材中心
+class Upload(Base):
+    """一個斷點續傳（tus）上傳。檔案先寫到 MEDIA_ROOT/_uploads/{id}.part，傳完才建立 Asset。"""
+
+    __tablename__ = "uploads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100), default="")
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    offset_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    asset_id: Mapped[str | None] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Asset(Base):
+    """一個上傳的原始素材（影片或照片）。分析後切成多個 Clip（鏡頭）。
+
+    status：uploaded 已上傳待分析 → processing 分析中 → ready 可用 / failed 失敗 / duplicate 與既有素材完全相同
+    """
+
+    __tablename__ = "assets"
+    __table_args__ = (Index("ix_assets_tenant_created", "tenant_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    uploaded_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    original_filename: Mapped[str] = mapped_column(String(255))
+    # 原始檔在 MEDIA_ROOT 底下的相對路徑，例如 {tenant}/assets/{id}/original.mp4
+    storage_key: Mapped[str] = mapped_column(String(500))
+    kind: Mapped[str] = mapped_column(String(16))  # video / image
+    status: Mapped[str] = mapped_column(String(16), default="uploaded", index=True)
+    # 分析進行到哪一步，或分析完成後的提醒（例如未設定看圖模型）
+    stage: Mapped[str] = mapped_column(String(200), default="")
+    error: Mapped[str] = mapped_column(String(500), default="")
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="", index=True)
+    duration: Mapped[float | None] = mapped_column(Float)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    fps: Mapped[float | None] = mapped_column(Float)
+    has_audio: Mapped[bool] = mapped_column(Boolean, default=False)
+    has_proxy: Mapped[bool] = mapped_column(Boolean, default=False)
+    has_poster: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 主要場景分類（取各鏡頭場景中時長最長者），可人工修改
+    category: Mapped[str] = mapped_column(String(32), default="", index=True)
+    note: Mapped[str] = mapped_column(String(500), default="")
+    is_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    duplicate_of: Mapped[str | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    clips: Mapped[list["Clip"]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Clip.index",
+        foreign_keys="Clip.asset_id",
+    )
+
+
+class Clip(Base):
+    """素材中的一個鏡頭（依畫面切換自動切分）。混剪時以鏡頭為單位挑選。"""
+
+    __tablename__ = "clips"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    asset_id: Mapped[str] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), index=True
+    )
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    index: Mapped[int] = mapped_column(Integer)
+    start: Mapped[float] = mapped_column(Float, default=0)
+    end: Mapped[float] = mapped_column(Float, default=0)
+    # 場景分類代碼，見 app/services/asset_analyzer.py 的 SCENES
+    scene: Mapped[str] = mapped_column(String(32), default="", index=True)
+    subjects: Mapped[list] = mapped_column(JSON, default=list)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    description: Mapped[str] = mapped_column(String(500), default="")
+    # good / ok / poor；空字串代表還沒評估
+    quality: Mapped[str] = mapped_column(String(8), default="")
+    is_dark: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 關鍵畫面的 64-bit 差異雜湊（dHash），用來找畫面幾乎相同的鏡頭
+    dhash: Mapped[int | None] = mapped_column(BigInteger)
+    duplicate_of_clip_id: Mapped[str | None] = mapped_column(
+        ForeignKey("clips.id", ondelete="SET NULL")
+    )
+    is_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ai：AI 標註；manual：人工修改過；空字串：尚未標註
+    tagged_by: Mapped[str] = mapped_column(String(8), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    asset: Mapped[Asset] = relationship(back_populates="clips", foreign_keys=[asset_id])
+
+
+class Task(Base):
+    """背景任務佇列（用 PostgreSQL 取代 Redis）。worker 以 FOR UPDATE SKIP LOCKED 領取。
+
+    status：queued → running → succeeded / failed；執行中的任務靠 lease_expires_at 判斷 worker 是否還活著，
+    租約過期的任務會被其他 worker 重新領取。
+    """
+
+    __tablename__ = "tasks"
+    __table_args__ = (Index("ix_tasks_pick", "status", "run_after"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    type: Mapped[str] = mapped_column(String(48), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    result: Mapped[dict | None] = mapped_column(JSON)
+    error: Mapped[str] = mapped_column(String(1000), default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    locked_by: Mapped[str] = mapped_column(String(80), default="")
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -7,6 +7,7 @@ import ComingSoonPage from './pages/ComingSoonPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import UsagePage from './pages/UsagePage'
+import AssetsPage from './pages/assets/AssetsPage'
 import UsersPage from './pages/UsersPage'
 
 const comingSoon = WORK_ITEMS.filter((item) => item.phase).map((item) => ({
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: 'assets', element: <AssetsPage /> },
       ...comingSoon,
       {
         path: 'settings/channels',

@@ -6,9 +6,10 @@
 # 允許的指令（其他一律拒絕）：
 #   status                 版本、容器狀態、健康檢查、磁碟與記憶體
 #   smoke                  透過網站入口與直連 API 測試健康檢查與管理員登入（只顯示狀態碼與耗時）
-#   logs <服務> [行數]      服務：api / web / postgres；行數最多 500；IP 與 Email 會遮罩
+#   logs <服務> [行數]      服務：api / worker / web / postgres；行數最多 500；IP 與 Email 會遮罩
+#   queue                  背景任務佇列與素材狀態統計、最近的失敗原因
 #   deploy                 執行 deploy.sh，完成後自動跑 smoke
-#   restart <服務>          重啟 api / web
+#   restart <服務>          重啟 api / worker / web
 #
 # 倉庫是公開的，Actions 記錄任何人都看得到：絕對不要在這裡輸出 .env 或任何密碼。
 # 整個流程包在 main() 裡，deploy 期間 git pull 更新本檔案時不影響這一次執行。
@@ -47,6 +48,8 @@ cmd_status() {
   uptime
   free -h
   df -h / /data 2>/dev/null || df -h /
+  echo "== 素材檔案"
+  "${COMPOSE[@]}" exec -T api du -sh /media 2>/dev/null || echo "  （無法讀取）"
   echo "== 最近部署"
   tail -5 .deploy-history.log 2>/dev/null || echo "  （沒有記錄）"
 }
@@ -84,16 +87,29 @@ PY
   echo "  （登入 401 代表管理員已在網頁上改過密碼，屬正常）"
 }
 
+cmd_queue() {
+  # 只查統計與錯誤訊息，不輸出任何設定或密碼
+  "${COMPOSE[@]}" exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off' <<'SQL' | redact
+\echo '== 任務（type / status / 數量）'
+SELECT type, status, count(*) FROM tasks GROUP BY 1, 2 ORDER BY 1, 2;
+\echo '== 素材（status / 數量）'
+SELECT status, count(*) FROM assets GROUP BY 1 ORDER BY 1;
+\echo '== 最近 10 筆失敗或重試中的任務'
+SELECT to_char(created_at, 'MM-DD HH24:MI') AS created, type, status, attempts, left(error, 160) AS error
+FROM tasks WHERE error <> '' ORDER BY created_at DESC LIMIT 10;
+SQL
+}
+
 cmd_logs() {
   local service=${1:-} lines=${2:-100}
-  [[ $service =~ ^(api|web|postgres)$ ]] || { echo "服務只能是 api / web / postgres" >&2; exit 2; }
+  [[ $service =~ ^(api|worker|web|postgres)$ ]] || { echo "服務只能是 api / worker / web / postgres" >&2; exit 2; }
   [[ $lines =~ ^[0-9]+$ ]] && (( lines >= 1 && lines <= 500 )) || { echo "行數需為 1～500" >&2; exit 2; }
   "${COMPOSE[@]}" logs --no-color --tail "$lines" "$service" 2>&1 | redact
 }
 
 cmd_restart() {
   local service=${1:-}
-  [[ $service =~ ^(api|web)$ ]] || { echo "只能重啟 api / web" >&2; exit 2; }
+  [[ $service =~ ^(api|worker|web)$ ]] || { echo "只能重啟 api / worker / web" >&2; exit 2; }
   "${COMPOSE[@]}" restart "$service"
   "${COMPOSE[@]}" ps "$service"
 }
@@ -108,6 +124,7 @@ main() {
     status) cmd_status ;;
     smoke) cmd_smoke ;;
     logs) cmd_logs "${args[1]:-}" "${args[2]:-100}" ;;
+    queue) cmd_queue ;;
     deploy)
       DEPLOY_HIDE_SECRETS=1 bash infra/scripts/deploy.sh 2>&1 | redact
       cmd_smoke

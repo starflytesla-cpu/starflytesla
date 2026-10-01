@@ -39,7 +39,6 @@ export const WORK_ITEMS: NavItem[] = [
     path: '/assets',
     label: '素材中心',
     icon: <FolderOpenOutlined />,
-    phase: 1,
     description: '手機拍攝直接上傳，系統自動切鏡頭、打標籤、分類，並偵測重複素材。',
   },
   {

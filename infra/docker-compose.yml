@@ -26,8 +26,36 @@ services:
       SECRET_KEY: ${SECRET_KEY:?請先執行 deploy.sh 產生 SECRET_KEY}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      MEDIA_ROOT: /media
+    volumes:
+      - media:/media
     depends_on:
       postgres:
+        condition: service_healthy
+
+  # 背景任務：素材分析（FFmpeg 轉檔、切鏡頭、AI 標註）。與 api 使用同一份程式碼。
+  worker:
+    build: ../services/api
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY:?請先執行 deploy.sh 產生 SECRET_KEY}
+      MEDIA_ROOT: /media
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    volumes:
+      - media:/media
+    # 停止時先讓 worker 中止 FFmpeg 並把任務放回佇列
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-heartbeat') > 60)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      # api 啟動時會先套用資料庫遷移
+      api:
         condition: service_healthy
 
   web:
@@ -42,11 +70,15 @@ services:
     volumes:
       - caddy-data:/data
       - caddy-config:/config
+      # 素材檔案由 Caddy 直接提供（先經 /api/media/auth 檢查權限），唯讀
+      - media:/media:ro
     depends_on:
       api:
         condition: service_healthy
 
 volumes:
   pg-data:
+  # 素材原始檔、預覽檔與關鍵畫面（Docker 資料在 /data/docker，位於 150 GB 資料碟）
+  media:
   caddy-data:
   caddy-config:

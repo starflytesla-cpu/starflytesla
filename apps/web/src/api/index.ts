@@ -82,8 +82,91 @@ export interface Dashboard {
   users: number
   channels: number
   ready_capabilities: Capability[]
+  assets: AssetStats
   month: MonthSummary | null
 }
+
+// ---------------------------------------------------------------- 素材中心
+export type AssetStatus = 'uploaded' | 'processing' | 'ready' | 'failed' | 'duplicate'
+export type Quality = 'good' | 'ok' | 'poor' | ''
+
+export interface Asset {
+  id: string
+  original_filename: string
+  kind: 'video' | 'image'
+  status: AssetStatus
+  /** 分析進行中的步驟，或完成後的提醒 */
+  stage: string
+  error: string
+  size_bytes: number
+  duration: number | null
+  width: number | null
+  height: number | null
+  fps: number | null
+  has_audio: boolean
+  category: string
+  note: string
+  is_disabled: boolean
+  duplicate_of: string | null
+  uploaded_by: string | null
+  uploaded_by_name: string
+  clip_count: number | null
+  created_at: string
+  analyzed_at: string | null
+  poster_url: string | null
+  proxy_url: string | null
+  original_url: string | null
+}
+
+export interface Clip {
+  id: string
+  asset_id: string
+  index: number
+  start: number
+  end: number
+  duration: number
+  scene: string
+  subjects: string[]
+  tags: string[]
+  description: string
+  quality: Quality
+  is_dark: boolean
+  is_disabled: boolean
+  tagged_by: '' | 'ai' | 'manual'
+  thumb_url: string
+  duplicate_of: { clip_id: string; asset_id: string; filename: string; index: number } | null
+}
+
+export interface AssetDetail extends Asset {
+  clips: Clip[]
+  duplicate_of_filename?: string
+}
+
+export interface AssetStats {
+  total: number
+  by_status: Record<AssetStatus, number>
+  by_category: Record<string, number>
+  clips: number
+}
+
+export interface AssetQuery {
+  limit: number
+  offset: number
+  status?: AssetStatus
+  category?: string
+  kind?: 'video' | 'image'
+  q?: string
+  mine?: boolean
+}
+
+export type ClipInput = Partial<{
+  scene: string
+  subjects: string[]
+  tags: string[]
+  description: string
+  quality: Quality
+  is_disabled: boolean
+}>
 
 export type ModelInput = {
   model_key: string
@@ -131,6 +214,15 @@ export const api = {
   testModel: (id: string, prompt?: string) =>
     http.post<TestResult>(`/channel-models/${id}/test`, prompt ? { prompt } : {}),
 
+  assets: (params: AssetQuery) => http.get<{ items: Asset[]; total: number }>('/assets', params),
+  assetStats: () => http.get<AssetStats>('/assets/stats'),
+  asset: (id: string) => http.get<AssetDetail>(`/assets/${id}`),
+  updateAsset: (id: string, body: Partial<{ category: string; note: string; is_disabled: boolean }>) =>
+    http.patch<AssetDetail>(`/assets/${id}`, body),
+  deleteAsset: (id: string) => http.delete<null>(`/assets/${id}`),
+  reanalyzeAsset: (id: string) => http.post<AssetDetail>(`/assets/${id}/reanalyze`),
+  updateClip: (id: string, body: ClipInput) => http.patch<AssetDetail>(`/clips/${id}`, body),
+
   usage: (params: { limit: number; offset: number; status?: string }) =>
     http.get<{ items: UsageItem[]; total: number }>('/usage', params),
   usageSummary: () =>
@@ -152,6 +244,51 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   vision: '看圖',
   tts: '配音',
   embedding: '向量',
+}
+
+/** 場景分類；與後端 app/services/asset_analyzer.py 的 SCENES 同步 */
+export const SCENE_LABELS: Record<string, string> = {
+  workshop: '工廠車間',
+  production: '生產過程',
+  product_closeup: '產品特寫',
+  packing: '包裝出貨',
+  warehouse: '倉庫庫存',
+  talking_head: '人物口播',
+  storefront: '門店環境',
+  team: '團隊人物',
+  outdoor: '戶外環境',
+  other: '其他',
+}
+
+export const ASSET_STATUS: Record<AssetStatus, { label: string; color: string }> = {
+  uploaded: { label: '等待分析', color: 'default' },
+  processing: { label: '分析中', color: 'processing' },
+  ready: { label: '可用', color: 'success' },
+  failed: { label: '失敗', color: 'error' },
+  duplicate: { label: '重複', color: 'warning' },
+}
+
+export const QUALITY_LABELS: Record<Exclude<Quality, ''>, { label: string; color: string }> = {
+  good: { label: '清楚', color: 'green' },
+  ok: { label: '普通', color: 'blue' },
+  poor: { label: '不佳', color: 'red' },
+}
+
+/** 素材還在排隊或分析中 */
+export function isBusy(status: AssetStatus): boolean {
+  return status === 'uploaded' || status === 'processing'
+}
+
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return ''
+  const total = Math.round(seconds)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
 export function formatUsd(value: number | null | undefined): string {
