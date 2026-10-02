@@ -36,6 +36,14 @@
 - `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫（唯一例外：上傳用 `src/api/upload.ts` 的 tus-js-client）；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
 - 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫與 ffmpeg）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
 
+## Linear 協作（與 Codex 共同開發）
+
+- Codex 讀的是 `AGENTS.md`（內容指向本檔 + 協作流程）；改了共用規則時兩份都要對得上。
+- Linear：Eilveiaan 團隊 → 專案「工廠混剪自動化 WebApp」（P-EIL-2，隸屬 SocialOps 社媒运营）。文件〈交接總覽（先讀這份）〉〈協作規範（Claude × Codex）〉；Milestones 對應 Phase 0～4。
+- **EIL-5〈📒 Git 變更記錄〉**：每次推送後在這裡留言（commit hash、說明、影響範圍、注意事項、驗證結果）；開工前先讀最新留言、看 In Progress 的 Issue，再 `git pull --rebase`。設定 `LINEAR_API_KEY` Secret 後，`.github/workflows/linear-git-log.yml` 會自動貼 commit 清單。
+- 每項工作對應一張 Issue，標籤 `Claude` / `Codex`，需要使用者動手的加 `待使用者操作`；commit 訊息結尾加 `(EIL-編號)`。
+- 不要 force push、不要改寫已推送的歷史；Codex 新增 Alembic 遷移時注意 `down_revision` 維持單一 head。
+
 ## 正式伺服器
 
 - QQG.NET 洛杉磯，6 核 / 12 GB，50 GB 系統碟 + 150 GB 資料碟，Ubuntu 24.04，IP `50.114.172.174`，沒有 DDoS 防護。

@@ -1,0 +1,77 @@
+# 每次推送後，把 commit 清單自動貼到 Linear 的〈📒 Git 變更記錄〉Issue（EIL-5），
+# 讓 Claude 與 Codex 都能核對對方改了什麼。
+# 需要在 GitHub Secrets 設定 LINEAR_API_KEY（Linear 個人 API Key）；未設定時只顯示警告並略過。
+name: Linear Git Log
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  log:
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post commits to Linear
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          # EIL-5〈📒 Git 變更記錄〉
+          LINEAR_ISSUE_ID: 6a64f77c-7885-46a7-b823-6b54c5c32857
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then
+            echo "::warning::尚未設定 LINEAR_API_KEY，略過自動記錄（請手動在 Linear EIL-5 留言）"
+            exit 0
+          fi
+          # commit 訊息只從事件檔讀取、以 JSON 送出，不嵌入 shell 指令
+          python3 - <<'PY'
+          import json, os, urllib.request
+
+          event = json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8"))
+          commits = event.get("commits") or []
+          if not commits:
+              print("沒有新的 commit，略過")
+              raise SystemExit(0)
+
+          def who(c):
+              text = (c.get("message", "") + " " + c.get("author", {}).get("name", "")).lower()
+              if "claude" in text:
+                  return "Claude"
+              if "codex" in text:
+                  return "Codex"
+              return c.get("author", {}).get("name", "未知")
+
+          branch = event.get("ref", "").removeprefix("refs/heads/")
+          pusher = event.get("pusher", {}).get("name", "")
+          lines = [f"**[自動] 推送到 `{branch}`**（{len(commits)} 個 commit，推送者 {pusher}）", ""]
+          for c in commits[-20:]:
+              title = c.get("message", "").splitlines()[0][:200]
+              lines.append(f"- [`{c['id'][:7]}`]({c['url']}) [{who(c)}] {title}")
+          if len(commits) > 20:
+              lines.append(f"- …其餘 {len(commits) - 20} 個請看比較頁")
+          if event.get("compare"):
+              lines += ["", f"比較：{event['compare']}"]
+
+          payload = {
+              "query": "mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success } }",
+              "variables": {"input": {"issueId": os.environ["LINEAR_ISSUE_ID"], "body": "\n".join(lines)}},
+          }
+          req = urllib.request.Request(
+              "https://api.linear.app/graphql",
+              data=json.dumps(payload).encode(),
+              headers={"Content-Type": "application/json", "Authorization": os.environ["LINEAR_API_KEY"]},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  result = json.load(resp)
+          except Exception as exc:  # Key 錯誤或 Linear 暫時無法連線：只警告，不讓推送顯示失敗
+              print(f"::warning::無法連線 Linear（{type(exc).__name__}），請手動在 EIL-5 留言")
+              raise SystemExit(0)
+          if result.get("errors") or not result.get("data", {}).get("commentCreate", {}).get("success"):
+              # 不輸出整個回應，避免洩漏任何資訊；只顯示錯誤訊息
+              print("::warning::Linear 記錄失敗：" + "; ".join(e.get("message", "") for e in result.get("errors", [])))
+          else:
+              print(f"已記錄 {len(commits)} 個 commit 到 Linear")
+          PY
