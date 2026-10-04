@@ -91,7 +91,7 @@ class ChannelModelUpdateIn(BaseModel):
 
 
 class ChannelCreateIn(BaseModel):
-    provider: Literal["deepseek", "byteplus", "openrouter", "kie", "custom"]
+    provider: Literal["deepseek", "byteplus", "volcengine", "openrouter", "kie", "custom"]
     name: str | None = Field(default=None, max_length=80)
     base_url: str | None = Field(default=None, max_length=500)
     api_key: str = Field(default="", max_length=500)

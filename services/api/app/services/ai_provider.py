@@ -227,6 +227,81 @@ def _chat_request(model: ChannelModel, base_url: str, api_key: str, messages: li
     return f"{base_url}/chat/completions", body
 
 
+# ---------------------------------------------------------------- 豆包方舟（BytePlus / 火山引擎）
+# 同一個「方舟」服務有國際版與中國區兩套，帳號與 API Key 互不相通：
+# 拿火山引擎的 Key 打 BytePlus（或反過來）會回 401「The API key doesn't exist」。
+ARK_ENDPOINTS = {
+    "byteplus": ("BytePlus 國際版（東南亞）", "https://ark.ap-southeast.bytepluses.com/api/v3"),
+    "volcengine": ("火山引擎方舟（中國區）", "https://ark.cn-beijing.volces.com/api/v3"),
+}
+ARK_PROBE_MODEL = "starfly-auth-probe"
+
+
+def is_ark(provider: str, base_url: str) -> bool:
+    return provider in ARK_ENDPOINTS or any(base_url.rstrip("/") == url for _, url in ARK_ENDPOINTS.values())
+
+
+def describe_key(api_key: str) -> str:
+    """描述 Key 的格式（不含 Key 內容），用來判斷是不是貼錯成 Access Key。"""
+    if not api_key:
+        return "未設定"
+    if api_key.startswith("AK"):
+        return f"AK 開頭、長度 {len(api_key)}（像是 Access Key ID，不是 API Key）"
+    try:
+        uuid.UUID(api_key)
+        return "UUID 格式（方舟 API Key 的格式）"
+    except ValueError:
+        return f"其他格式、長度 {len(api_key)}"
+
+
+def probe_ark_auth(base_url: str, api_key: str) -> int | None:
+    """用不存在的模型名稱送一次請求，只看驗證是否通過（模型不存在不會產生費用）。
+
+    回傳 HTTP 狀態碼：401 代表這個端點不認得這把 Key；其他 4xx 代表驗證已通過；None 代表連線失敗。
+    """
+    try:
+        response = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"model": ARK_PROBE_MODEL, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1},
+            timeout=15,
+            follow_redirects=False,
+        )
+    except httpx.HTTPError:
+        return None
+    return response.status_code
+
+
+def ark_key_home(api_key: str, exclude_url: str = "") -> tuple[str, str, str] | None:
+    """找出這把 Key 屬於哪一個方舟端點，回傳 (provider, 名稱, 網址)。
+
+    先用一把一定不存在的 Key 校正：如果假 Key 在該端點也不是 401，代表判斷不出來，不下結論。
+    """
+    for provider, (label, url) in ARK_ENDPOINTS.items():
+        if url == exclude_url.rstrip("/"):
+            continue
+        status = probe_ark_auth(url, api_key)
+        if status is None or status == 401 or status >= 500:
+            continue
+        if probe_ark_auth(url, str(uuid.uuid4())) == 401:
+            return provider, label, url
+    return None
+
+
+def _ark_401_hint(api_key: str, base_url: str) -> str:
+    """方舟回 401 時，說明 Key 實際屬於哪裡、該怎麼改。"""
+    if api_key.startswith("AK"):
+        return "。這把 Key 是 AK 開頭的 Access Key，請改填方舟控制台「API Key 管理」頁建立的 API Key"
+    home = ark_key_home(api_key, exclude_url=base_url)
+    if home:
+        _, label, url = home
+        return (
+            f"。這把 Key 屬於「{label}」：請到「模型渠道」編輯這個渠道，把 Base URL 改成 {url}，"
+            "並把模型名稱改成該平台控制台上的 Model ID（或用對應的豆包預設新增渠道）"
+        )
+    return "。BytePlus 國際版與火山引擎中國區都不認得這把 Key，請到方舟控制台確認 Key 沒有被刪除，再重新複製貼上"
+
+
 def _parse_chat(body: dict) -> tuple[str, int, int]:
     """回傳 (回覆文字, 輸入 token, 輸出 token)。支援 OpenAI 格式，以及 kie 有時回傳的 Gemini 原生格式。"""
     if "choices" in body:
@@ -257,6 +332,8 @@ def chat(
         base_url = validate_upstream_url(model.channel.base_url)
         url, request_body = _chat_request(model, base_url, api_key, messages, max_tokens)
         response = _send("POST", url, api_key, request_body)
+        if response.status_code == 401 and is_ark(model.channel.provider, base_url):
+            raise upstream_error(_upstream_message(response) + _ark_401_hint(api_key, base_url), "upstream_auth")
         body = _json(response)
         if "choices" not in body and "candidates" not in body:
             # kie 等服務出錯時可能回 HTTP 200，錯誤放在內容的 code / msg

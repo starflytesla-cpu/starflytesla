@@ -8,6 +8,7 @@
 #   smoke                  透過網站入口與直連 API 測試健康檢查與管理員登入（只顯示狀態碼與耗時）
 #   logs <服務> [行數]      服務：api / worker / web / postgres；行數最多 500；IP 與 Email 會遮罩
 #   queue                  背景任務佇列、素材與成片狀態統計、最近的失敗原因
+#   ai-check               模型渠道概況；豆包方舟渠道實測 Key 屬於 BytePlus 或火山引擎（不輸出 Key）
 #   deploy                 執行 deploy.sh，完成後自動跑 smoke
 #   restart <服務>          重啟 api / worker / web
 #
@@ -109,6 +110,11 @@ FROM tasks WHERE error <> '' ORDER BY created_at DESC LIMIT 10;
 SQL
 }
 
+cmd_ai_check() {
+  # app/diagnostics.py 只輸出渠道名稱、主機、Key 格式與驗證結果，不輸出 Key 本身
+  "${COMPOSE[@]}" exec -T api python -m app.diagnostics 2>&1 | redact
+}
+
 cmd_logs() {
   local service=${1:-} lines=${2:-100}
   [[ $service =~ ^(api|worker|web|postgres)$ ]] || { echo "服務只能是 api / worker / web / postgres" >&2; exit 2; }
@@ -134,6 +140,7 @@ main() {
     smoke) cmd_smoke ;;
     logs) cmd_logs "${args[1]:-}" "${args[2]:-100}" ;;
     queue) cmd_queue ;;
+    ai-check) cmd_ai_check ;;
     deploy)
       DEPLOY_HIDE_SECRETS=1 bash infra/scripts/deploy.sh 2>&1 | redact
       cmd_smoke

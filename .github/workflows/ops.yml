@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "指令：status / smoke / queue / logs api 200 / logs worker 200 / deploy / restart worker"
+        description: "指令：status / smoke / queue / ai-check / logs api 200 / logs worker 200 / deploy / restart worker"
         required: true
         default: status
   workflow_run:

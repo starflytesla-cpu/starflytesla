@@ -27,7 +27,7 @@
 
 - `services/api/`：FastAPI。路由在 `app/routers/`，只處理輸入輸出；業務邏輯在 `app/services/`；資料表在 `app/models.py`，改資料表必須新增 Alembic 遷移（`alembic revision --autogenerate`）並用 `alembic check` 確認。
 - API 回應一律是 `{code, data, msg, reason}`：成功用 `schemas.ok()`；失敗丟 `app.errors` 的 `AppError`，HTTP status 要反映真實失敗，`msg` 是可直接顯示的繁體中文。
-- **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。kie.ai 的特殊處理也在這裡：網址是 `{base}/{model_key}/v1/chat/completions`、預設串流要關掉、圖片要先經 kie 檔案上傳 API 換成網址。
+- **所有 AI 呼叫都必須走 `app/services/ai_provider.py`**，才會寫入 `usage_ledger` 成本記錄。kie.ai 的特殊處理也在這裡：網址是 `{base}/{model_key}/v1/chat/completions`、預設串流要關掉、圖片要先經 kie 檔案上傳 API 換成網址。豆包方舟分 BytePlus 國際版（`byteplus`）與火山引擎中國區（`volcengine`）兩套，Key 與模型名稱互不相通；方舟回 401 時 `chat` 會自動探測 Key 屬於哪一區並在錯誤訊息說明。
 - 渠道 API Key 用 `security.encrypt_secret` 加密存放，永遠不回傳給前端；上游網址要經過 `validate_upstream_url`（防 SSRF）。
 - 背景任務：`app/services/tasks.py` 的 `enqueue` 排入 `tasks` 表，`app/worker.py`（`worker` 容器）領取執行；新任務類型在 `HANDLERS` 註冊。FFmpeg 呼叫集中在 `app/services/media.py`。
 - 文案：`script_writer.py`（worker 任務 `script.generate`）組 prompt 與解析；內建模板在 `template_library.py`（改完重新部署即同步）；音色清單在 `voices.py`（Gemini 與 ElevenLabs 兩種引擎，`resolve_voice` 依配音模型換成可用音色）；試聽、音色樣本、成片配音快取都在 `speech.py`（`ai_provider.tts`）。
@@ -56,7 +56,7 @@
 雲端開發環境不能直接 SSH 到伺服器，改用 `.github/workflows/ops.yml`：
 
 - 用 GitHub MCP 的 `actions_run_trigger`（`run_workflow`，workflow `ops.yml`，ref `claude/exciting-fermi-nad1gj`，inputs `{"command": "..."}`）觸發，再用 `actions_list` / `get_job_logs` 讀結果。
-- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`queue`（任務佇列 / 素材狀態 / 最近錯誤）、`logs <api|worker|web|postgres> [行數]`、`deploy`、`restart <api|worker|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
+- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`queue`（任務佇列 / 素材狀態 / 最近錯誤）、`ai-check`（模型渠道概況；豆包方舟 Key 實測屬於 BytePlus 國際版或火山引擎中國區，不輸出 Key）、`logs <api|worker|web|postgres> [行數]`、`deploy`、`restart <api|worker|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
 - 推送到 `claude/exciting-fermi-nad1gj` 且 CI 通過後，Ops 會自動執行 `deploy`（部署完會跑 `smoke`）。
 - 需要使用者先在伺服器執行 `setup-ops.sh` 並設定 `OPS_HOST` / `OPS_KNOWN_HOSTS` / `OPS_SSH_KEY` 三個 Secrets；未設定時 workflow 會顯示警告並略過。
 - 這台伺服器的主機商模板預設**關閉金鑰登入**（回應 `Permission denied (password)`），需在伺服器執行 `bash infra/scripts/enable-ssh-key.sh` 開啟（2026-09-30 已請使用者執行）。

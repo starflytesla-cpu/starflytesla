@@ -2,7 +2,7 @@
 
 價格來源（2026-09 查詢）：
 - DeepSeek：https://api-docs.deepseek.com/quick_start/pricing（採尖峰價，離峰為一半）
-- BytePlus ModelArk：價格依模型與區域而異，請到 BytePlus 控制台確認後在後台填入
+- BytePlus ModelArk / 火山引擎方舟：價格依模型與區域而異，請到 BytePlus 控制台確認後在後台填入
 - kie.ai：以點數計費（https://kie.ai/pricing），換算成每百萬 token 價格後在後台填入
 """
 
@@ -42,7 +42,7 @@ PRESETS: dict[str, dict] = {
     "byteplus": {
         "name": "豆包（BytePlus ModelArk）",
         "base_url": "https://ark.ap-southeast.bytepluses.com/api/v3",
-        "api_key_help": "在 BytePlus ModelArk 控制台的 API Key 管理頁建立，並先開通要使用的模型",
+        "api_key_help": "BytePlus 國際版（console.byteplus.com/ark）的 API Key，和火山引擎中國區不通用；在 API Key 管理頁建立，並先開通要使用的模型",
         "models": [
             {
                 "model_key": "seed-2-0-lite-260228",
@@ -51,6 +51,15 @@ PRESETS: dict[str, dict] = {
                 "is_default": True,
             },
         ],
+    },
+    "volcengine": {
+        "name": "豆包（火山引擎方舟，中國區）",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "api_key_help": (
+            "火山引擎（中國區）方舟的 Key，和 BytePlus 國際版不通用。在 console.volcengine.com/ark 的「API Key 管理」建立，"
+            "並在「開通管理」開通模型；模型名稱請填控制台上的 Model ID（例如 doubao-seed-…）或推理接入點 ID（ep-…）"
+        ),
+        "models": [],
     },
     "openrouter": {
         "name": "OpenRouter",

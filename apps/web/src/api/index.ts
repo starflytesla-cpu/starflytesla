@@ -2,7 +2,7 @@ import { http } from './http'
 
 export type Role = 'admin' | 'shooter'
 export type Capability = 'text' | 'vision' | 'tts' | 'music' | 'embedding'
-export type Provider = 'deepseek' | 'byteplus' | 'openrouter' | 'kie' | 'custom'
+export type Provider = 'deepseek' | 'byteplus' | 'volcengine' | 'openrouter' | 'kie' | 'custom'
 
 export interface User {
   id: string
