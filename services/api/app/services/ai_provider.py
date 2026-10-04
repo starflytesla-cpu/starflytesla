@@ -249,7 +249,7 @@ def describe_key(api_key: str) -> str:
         return f"AK 開頭、長度 {len(api_key)}（像是 Access Key ID，不是 API Key）"
     try:
         uuid.UUID(api_key)
-        return "UUID 格式（方舟 API Key 的格式）"
+        return "UUID 格式"
     except ValueError:
         return f"其他格式、長度 {len(api_key)}"
 
