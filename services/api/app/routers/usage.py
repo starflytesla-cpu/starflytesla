@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.deps import DB, AdminUser
-from app.models import ModelChannel, UsageLedger, User
+from app.models import ModelChannel, PublishChannel, UsageLedger, User
 from app.schemas import micros_to_usd, ok
 
 router = APIRouter(prefix="/api", tags=["usage"])
@@ -47,8 +47,9 @@ def list_usage(
         where.append(UsageLedger.status == status)
     total = db.scalar(select(func.count()).select_from(UsageLedger).where(*where))
     rows = db.execute(
-        select(UsageLedger, ModelChannel.name, User.display_name)
+        select(UsageLedger, func.coalesce(ModelChannel.name, PublishChannel.name), User.display_name)
         .outerjoin(ModelChannel, ModelChannel.id == UsageLedger.channel_id)
+        .outerjoin(PublishChannel, PublishChannel.id == UsageLedger.publish_channel_id)
         .outerjoin(User, User.id == UsageLedger.user_id)
         .where(*where)
         .order_by(UsageLedger.created_at.desc())

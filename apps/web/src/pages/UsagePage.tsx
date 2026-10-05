@@ -7,6 +7,7 @@ import PageHeader from '../components/PageHeader'
 
 const SOURCE_LABELS: Record<string, string> = {
   channel_test: '渠道測試',
+  publish_channel_test: '發佈渠道檢查',
 }
 
 const PAGE_SIZE = 20
@@ -26,7 +27,7 @@ export default function UsagePage() {
     <>
       <PageHeader
         title="用量與成本"
-        subtitle="每一次 AI 呼叫都會記錄 token 與估算成本。試營運只記錄不扣費，之後用來訂定積分價格。"
+        subtitle="記錄 AI、渲染與渠道檢查的用量和成本。試營運只記錄不扣費，之後用來訂定積分價格。"
       />
       <Row gutter={[16, 16]} className="section">
         <Col xs={12} md={6}>

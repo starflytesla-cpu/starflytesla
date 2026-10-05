@@ -3,9 +3,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-from app.models import ChannelModel, ModelChannel, User
+from app.models import ChannelModel, ModelChannel, PublishChannel, User
 
 Role = Literal["admin", "shooter"]
 Capability = Literal["text", "vision", "tts", "music", "embedding"]
@@ -27,6 +27,51 @@ Email = Annotated[str, Field(max_length=254), AfterValidator(_normalize_email)]
 
 def ok(data=None, msg: str = "ok") -> dict:
     return {"code": 0, "data": data, "msg": msg}
+
+
+# ---------------------------------------------------------------- 發佈渠道
+def _publish_key(value: str) -> str:
+    value = value.strip()
+    if value and (len(value) < 8 or any(not 33 <= ord(c) <= 126 for c in value)):
+        raise ValueError("API Key 格式不正確")
+    return value
+
+
+PublishKey = Annotated[str, Field(max_length=500), AfterValidator(_publish_key)]
+ChannelName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
+class PublishChannelCreateIn(BaseModel):
+    name: ChannelName = "Upload-Post"
+    base_url: str = Field(default="https://api.upload-post.com/api", max_length=500)
+    api_key: PublishKey = ""
+    enabled: bool = True
+
+
+class PublishChannelUpdateIn(BaseModel):
+    name: ChannelName | None = None
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: PublishKey | None = None
+    clear_api_key: bool = False
+    enabled: bool | None = None
+
+
+def publish_channel_out(channel: PublishChannel) -> dict:
+    # 明確列出可公開的欄位，不能使用 ORM 的完整序列化。
+    return {
+        "id": channel.id,
+        "name": channel.name,
+        "provider": channel.provider,
+        "base_url": channel.base_url,
+        "has_api_key": bool(channel.api_key_encrypted),
+        "api_key_last4": channel.api_key_last4,
+        "enabled": channel.enabled,
+        "check_status": channel.check_status,
+        "check_error": channel.check_error,
+        "plan": channel.plan,
+        "checked_at": channel.checked_at.isoformat() if channel.checked_at else None,
+        "created_at": channel.created_at.isoformat(),
+    }
 
 
 # ---------------------------------------------------------------- 使用者

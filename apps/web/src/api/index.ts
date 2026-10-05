@@ -38,6 +38,29 @@ export interface Channel {
   models: ChannelModel[]
 }
 
+export interface PublishChannel {
+  id: string
+  name: string
+  provider: 'uploadpost'
+  base_url: string
+  has_api_key: boolean
+  api_key_last4: string
+  enabled: boolean
+  check_status: 'untested' | 'succeeded' | 'failed'
+  check_error: string
+  plan: string
+  checked_at: string | null
+  created_at: string
+}
+
+export interface PublishChannelInput {
+  name: string
+  base_url: string
+  api_key?: string
+  enabled?: boolean
+  clear_api_key?: boolean
+}
+
 export interface Preset {
   provider: Provider
   name: string
@@ -413,6 +436,13 @@ export const api = {
   presets: () =>
     http.get<{ presets: Preset[]; capabilities: Record<Capability, string> }>('/channel-presets'),
   channels: () => http.get<Channel[]>('/channels'),
+  publishChannels: () => http.get<PublishChannel[]>('/publish-channels'),
+  createPublishChannel: (body: PublishChannelInput) =>
+    http.post<PublishChannel>('/publish-channels', body),
+  updatePublishChannel: (id: string, body: Partial<PublishChannelInput>) =>
+    http.patch<PublishChannel>(`/publish-channels/${id}`, body),
+  testPublishChannel: (id: string) =>
+    http.post<{ plan: string; duration_ms: number; cost_usd: number }>(`/publish-channels/${id}/test`),
   createChannel: (body: { provider: Provider; name?: string; base_url?: string; api_key: string }) =>
     http.post<Channel>('/channels', body),
   updateChannel: (

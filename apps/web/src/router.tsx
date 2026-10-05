@@ -3,6 +3,7 @@ import { AdminOnly, RequireAuth } from './auth'
 import AppLayout from './layouts/AppLayout'
 import { WORK_ITEMS } from './navigation'
 import ChannelsPage from './pages/ChannelsPage'
+import PublishChannelsPage from './pages/PublishChannelsPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
@@ -102,6 +103,14 @@ export const router = createBrowserRouter([
         element: (
           <AdminOnly>
             <ChannelsPage />
+          </AdminOnly>
+        ),
+      },
+      {
+        path: 'settings/publish-channels',
+        element: (
+          <AdminOnly>
+            <PublishChannelsPage />
           </AdminOnly>
         ),
       },

@@ -110,6 +110,29 @@ class ChannelModel(Base):
     channel: Mapped[ModelChannel] = relationship(back_populates="models")
 
 
+class PublishChannel(Base):
+    """發佈服務的渠道；與 AI 模型渠道分開，金鑰只保存密文。"""
+
+    __tablename__ = "publish_channels"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    provider: Mapped[str] = mapped_column(String(32), default="uploadpost")
+    base_url: Mapped[str] = mapped_column(String(500))
+    api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
+    api_key_last4: Mapped[str] = mapped_column(String(8), default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    check_status: Mapped[str] = mapped_column(String(16), default="untested")
+    check_error: Mapped[str] = mapped_column(String(500), default="")
+    plan: Mapped[str] = mapped_column(String(80), default="")
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class UsageLedger(Base):
     """成本記錄：每次 AI / 渲染 / 發佈動作一筆。試營運只記錄不扣費，商品化時據此訂積分價格。
 
@@ -127,6 +150,9 @@ class UsageLedger(Base):
     source: Mapped[str] = mapped_column(String(48))
     channel_id: Mapped[str | None] = mapped_column(
         ForeignKey("model_channels.id", ondelete="SET NULL"), index=True
+    )
+    publish_channel_id: Mapped[str | None] = mapped_column(
+        ForeignKey("publish_channels.id", ondelete="SET NULL", name="fk_usage_ledger_publish_channel_id"), index=True
     )
     provider: Mapped[str] = mapped_column(String(32), default="")
     model_key: Mapped[str] = mapped_column(String(160), default="")
