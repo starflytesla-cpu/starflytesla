@@ -8,13 +8,17 @@ import PageHeader from '../components/PageHeader'
 const SOURCE_LABELS: Record<string, string> = {
   channel_test: '渠道測試',
   publish_channel_test: '發佈渠道檢查',
+  publish_post: '發佈貼文',
+  post_copy: '貼文草稿',
+  comment_suggest: '評論建議',
+  comment_reply: '人工回覆',
 }
 
 const PAGE_SIZE = 20
 
 export default function UsagePage() {
   const [page, setPage] = useState(1)
-  const [status, setStatus] = useState<'all' | 'succeeded' | 'failed'>('all')
+  const [status, setStatus] = useState<'all' | 'succeeded' | 'failed' | 'pending' | 'uncertain'>('all')
   const summary = useQuery({ queryKey: ['usage', 'summary'], queryFn: api.usageSummary })
   const list = useQuery({
     queryKey: ['usage', 'list', page, status],
@@ -27,7 +31,7 @@ export default function UsagePage() {
     <>
       <PageHeader
         title="用量與成本"
-        subtitle="記錄 AI、渲染與渠道檢查的用量和成本。試營運只記錄不扣費，之後用來訂定積分價格。"
+        subtitle="記錄 AI、渲染、發佈與回覆的用量和成本。價格未知時保留未知，平台處理中與回執待核對分別顯示。"
       />
       <Row gutter={[16, 16]} className="section">
         <Col xs={12} md={6}>
@@ -85,6 +89,8 @@ export default function UsagePage() {
               { label: '全部', value: 'all' },
               { label: '成功', value: 'succeeded' },
               { label: '失敗', value: 'failed' },
+              { label: '處理中', value: 'pending' },
+              { label: '待核對', value: 'uncertain' },
             ]}
           />
         }
@@ -122,10 +128,12 @@ export default function UsagePage() {
               render: (v: string, r) =>
                 v === 'succeeded' ? (
                   <Tag color="green">成功</Tag>
-                ) : (
+                ) : v === 'failed' ? (
                   <Tooltip title={r.error}>
                     <Tag color="red">失敗</Tag>
                   </Tooltip>
+                ) : (
+                  <Tooltip title={r.error}><Tag color="orange">{v === 'pending' ? '處理中' : '回執待核對'}</Tag></Tooltip>
                 ),
             },
             { title: 'Token（入 / 出）', render: (_, r) => `${r.input_tokens} / ${r.output_tokens}` },

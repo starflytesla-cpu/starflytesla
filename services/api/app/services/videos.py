@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import AppError, bad_request, conflict, not_found
 from app.models import Asset, Clip, Script, User, Video, new_id, utcnow
-from app.services import ai_provider, media, music, renderer, tasks
+from app.services import ai_provider, media, music, posts, renderer, tasks
 
 STATUSES = ("queued", "rendering", "pending_review", "approved", "rejected", "failed")
 BUSY = ("queued", "rendering")
@@ -214,6 +214,7 @@ def _ensure_idle(video: Video) -> None:
 
 
 def review(db: Session, user: User, video: Video, action: str, note: str) -> None:
+    posts.guard_video(db, video)
     if video.status not in ("pending_review", "approved", "rejected"):
         raise conflict("這支成片目前不能審核", "video_not_reviewable")
     if action == "reject" and not note.strip():
@@ -232,6 +233,7 @@ def _queue(db: Session, video: Video, mode: str) -> None:
 
 
 def replace_clip(db: Session, video: Video, shot_index: int, clip_id: str) -> None:
+    posts.guard_video(db, video)
     _ensure_idle(video)
     timeline = dict(video.timeline or {})
     shots = [dict(s) for s in timeline.get("shots", [])]
@@ -246,6 +248,7 @@ def replace_clip(db: Session, video: Video, shot_index: int, clip_id: str) -> No
 
 
 def rerender(db: Session, video: Video, reshuffle: bool) -> None:
+    posts.guard_video(db, video)
     _ensure_idle(video)
     if reshuffle:
         video.options = {**(video.options or {}), "seed": random.randrange(1, 2**31)}
@@ -277,6 +280,7 @@ def candidates(db: Session, video: Video, shot_index: int, limit: int = 40) -> l
 
 
 def delete_video(db: Session, video: Video) -> None:
+    posts.guard_video(db, video)
     if video.status == "rendering":
         raise conflict("成片正在渲染中，請稍候再刪除", "video_busy")
     directory = renderer.video_dir(video.tenant_id, video.id)

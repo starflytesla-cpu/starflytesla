@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
@@ -310,3 +311,42 @@ class MusicGenerateIn(BaseModel):
 class MusicUpdateIn(BaseModel):
     title: str | None = Field(default=None, max_length=120)
     is_active: bool | None = None
+
+
+# ---------------------------------------------------------------- 發佈與評論
+Platform = Literal["tiktok", "instagram", "youtube", "facebook"]
+
+
+class BindAccountsIn(BaseModel):
+    channel_id: str = Field(max_length=36)
+    profile_id: str = Field(max_length=36)
+    remote_profile: str = Field(min_length=1, max_length=160)
+    platforms: Annotated[list[Platform], Field(min_length=1, max_length=4)]
+
+
+class AccountUpdateIn(BaseModel):
+    enabled: bool | None = None
+    auto_suggest_enabled: bool | None = None
+
+
+class PostCopyIn(BaseModel):
+    video_id: str = Field(max_length=36)
+    platform: Platform
+
+
+class SchedulePostIn(BaseModel):
+    request_key: UUID
+    video_id: str = Field(max_length=36)
+    account_id: str = Field(max_length=36)
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+    description: str = Field(default="", max_length=2000)
+    hashtags: Annotated[list[Annotated[str, StringConstraints(pattern=r"^#[\w]+$", max_length=50)]], Field(max_length=10)] = []
+    schedule_at: datetime
+    confirmed: Literal[True]
+    is_ai_generated: bool = True
+
+
+class ReplyCommentIn(BaseModel):
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    confirmed: Literal[True]
+    version: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]+$")

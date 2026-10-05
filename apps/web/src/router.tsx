@@ -4,6 +4,9 @@ import AppLayout from './layouts/AppLayout'
 import { WORK_ITEMS } from './navigation'
 import ChannelsPage from './pages/ChannelsPage'
 import PublishChannelsPage from './pages/PublishChannelsPage'
+import PublishAccountsPage from './pages/PublishAccountsPage'
+import PublishTasksPage from './pages/PublishTasksPage'
+import CommentsPage from './pages/CommentsPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
@@ -98,6 +101,9 @@ export const router = createBrowserRouter([
         ),
       },
       ...comingSoon,
+      { path: 'publish-accounts', element: <AdminOnly><PublishAccountsPage /></AdminOnly> },
+      { path: 'publish-tasks', element: <AdminOnly><PublishTasksPage /></AdminOnly> },
+      { path: 'comments', element: <AdminOnly><CommentsPage /></AdminOnly> },
       {
         path: 'settings/channels',
         element: (

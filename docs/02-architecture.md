@@ -98,16 +98,15 @@ Caddy 提供網頁、反向代理 `/api`，並在設定網域後自動申請 HTT
 
 ### 3.4 發佈與評論
 
-```python
-class PublisherAdapter(Protocol):
-    def publish(self, account, video, caption, schedule_at) -> PublishResult: ...
-    def fetch_comments(self, account, post_id) -> list[Comment]: ...
-    def reply_comment(self, account, comment_id, text) -> None: ...
-```
+2026-10-05 的實作集中在 `services/api/app/services/upload_post.py`，處理 TikTok、IG、YouTube、FB 的 Upload-Post API、加密憑證解密、每次請求的 HTTPS／DNS 驗證、禁止轉址與安全錯誤分類。接入第二個供應商時再抽共同介面。
 
-第一個實作是 `UploadPostAdapter`（TikTok、IG、YouTube、FB）。之後視成本改接各平台官方 API，只需要新增 adapter。
+`social_accounts.py` 讀取遠端 profile 並驗證實際平台帳號，再對應本地 `BrandProfile`；遠端目的地變更不會靜默改寫已排程的目的地。OAuth／profile 建立沿用 Upload-Post 官方帳號管理入口。
 
-評論管理：定時拉取評論 → LLM 分類（詢價 / 好評 / 投訴 / 垃圾）→ 產生建議回覆 → **人工確認後才送出**（初期不做自動回覆）。
+`posts.py` 把人工確認過的影片雜湊、審核時間、帳號目的地與冪等鍵存進 `Post`，由 `publish.post` 到期執行。對外 POST 前先提交 `submitting` 與成本帳本；工作中斷、逾時或回執不明時，`publish.reconcile` 只讀取原任務結果，不重送影片。公開發佈必須有平台成功證據與貼文 ID／網址；收件匣草稿另記 `draft_delivery`。未知費用為 NULL。
+
+`comments.py` 定期同步最近 30 天的貼文評論，保存分頁 cursor 並去重。AI 建議預設手動，可由管理員明確允許背景付費建議；呼叫統一走 `ai_provider`，分類與建議不會直接回覆。送出前必須人工確認，並核對原評論版本；對外 POST 前保存人工文字與 `sending` 狀態，未知回執不自動重送。
+
+新增 `SocialAccount`、`Post`、`Comment` 與成本關聯的 migration 0009／0010；實作已本地驗證，尚未部署或真實服務驗收，詳見 `docs/06-codex-handoff.md`。
 
 ### 3.5 人工審核流程
 

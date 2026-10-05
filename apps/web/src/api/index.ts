@@ -84,13 +84,70 @@ export interface UsageItem {
   channel_name: string
   provider: string
   model_key: string
-  status: 'succeeded' | 'failed'
+  status: 'succeeded' | 'failed' | 'pending' | 'uncertain'
   input_tokens: number
   output_tokens: number
   duration_ms: number
   cost_usd: number | null
   error: string
   user_name: string
+}
+
+export type SocialPlatform = 'tiktok' | 'instagram' | 'youtube' | 'facebook'
+export const PLATFORM_LABELS: Record<SocialPlatform, string> = { tiktok: 'TikTok', instagram: 'Instagram Reels', youtube: 'YouTube Shorts', facebook: 'Facebook Reels' }
+export interface SocialAccount {
+  id: string
+  channel_id: string
+  profile_id: string | null
+  remote_profile: string
+  platform: SocialPlatform
+  external_account_id: string
+  display_name: string
+  handle: string
+  enabled: boolean
+  auto_suggest_enabled: boolean
+  auth_status: string
+  capabilities: string[]
+  checked_at: string | null
+}
+export interface RemoteProfile {
+  username: string
+  accounts: Partial<Record<SocialPlatform, Pick<SocialAccount, 'external_account_id' | 'display_name' | 'handle' | 'auth_status' | 'capabilities'>>>
+}
+export interface PostCopy { title: string; description: string; hashtags: string[] }
+export interface PostItem extends PostCopy {
+  id: string
+  video_id: string | null
+  account_id: string
+  platform: SocialPlatform
+  remote_profile: string
+  status: string
+  schedule_at: string
+  created_at: string
+  published_at: string | null
+  is_ai_generated: boolean
+  url: string
+  remote_id: string
+  error: string
+  comments_error: string
+  comments_checked_at: string | null
+}
+export interface SocialComment {
+  id: string
+  post_id: string
+  author: string
+  text: string
+  version: string
+  intent: string
+  suggested_reply: string
+  ai_status: string
+  ai_error: string
+  reply_status: string
+  reply_text: string
+  remote_reply_id: string
+  error: string
+  created_at: string
+  replied_at: string | null
 }
 
 export interface TestResult {
@@ -415,6 +472,25 @@ export type ModelInput = {
 }
 
 export const api = {
+  socialAccounts: () => http.get<SocialAccount[]>('/social-accounts'),
+  remoteProfiles: (channel_id: string) => http.get<RemoteProfile[]>('/social-accounts/remote-profiles', { channel_id }),
+  bindSocialAccounts: (body: { channel_id: string; profile_id: string; remote_profile: string; platforms: SocialPlatform[] }) =>
+    http.post<SocialAccount[]>('/social-accounts/bind', body),
+  updateSocialAccount: (id: string, enabled: boolean) => http.patch<SocialAccount>(`/social-accounts/${id}`, { enabled }),
+  setAutoSuggestions: (id: string, auto_suggest_enabled: boolean) => http.patch<SocialAccount>(`/social-accounts/${id}`, { auto_suggest_enabled }),
+  checkSocialAccount: (id: string) => http.post<SocialAccount>(`/social-accounts/${id}/check`),
+  posts: (params: { limit: number; offset: number }) => http.get<{ items: PostItem[]; total: number }>('/posts', params),
+  postRequestKey: () => http.get<{ request_key: string }>('/posts/request-key'),
+  postCopy: (video_id: string, platform: SocialPlatform) => http.post<PostCopy>('/posts/copy', { video_id, platform }, { timeout: 200_000 }),
+  schedulePost: (body: PostCopy & { request_key: string; video_id: string; account_id: string; schedule_at: string; confirmed: true; is_ai_generated: boolean }) =>
+    http.post<PostItem>('/posts', body),
+  cancelPost: (id: string) => http.post<PostItem>(`/posts/${id}/cancel`),
+  reconcilePost: (id: string) => http.post<PostItem>(`/posts/${id}/reconcile`),
+  syncPostComments: (id: string) => http.post<{ comments: number }>(`/posts/${id}/sync-comments`),
+  comments: (params: { limit: number; offset: number; unreplied?: boolean; negative?: boolean }) =>
+    http.get<{ items: SocialComment[]; total: number }>('/comments', params),
+  suggestComment: (id: string) => http.post<SocialComment>(`/comments/${id}/suggest`, {}, { timeout: 200_000 }),
+  replyComment: (id: string, text: string, version: string) => http.post<SocialComment>(`/comments/${id}/reply`, { text, version, confirmed: true }),
   // 登入不該等太久：20 秒沒回應就顯示錯誤，而不是一直轉圈
   login: (email: string, password: string) =>
     http.post<User>('/auth/login', { email, password }, { timeout: 20_000 }),

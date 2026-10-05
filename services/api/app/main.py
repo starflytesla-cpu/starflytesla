@@ -16,6 +16,7 @@ from app.routers import (
     music,
     profiles,
     publish_channels,
+    publishing,
     scripts,
     system,
     tasks,
@@ -76,5 +77,5 @@ async def unhandled_error_handler(request: Request, exc: Exception):
     return _error(500, "internal_error", "系統處理失敗，請稍後再試")
 
 
-for module in (system, auth, users, channels, publish_channels, usage, uploads, assets, media, profiles, templates, scripts, voices, videos, tasks, music):
+for module in (system, auth, users, channels, publish_channels, publishing, usage, uploads, assets, media, profiles, templates, scripts, voices, videos, tasks, music):
     app.include_router(module.router)

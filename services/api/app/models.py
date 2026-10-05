@@ -154,6 +154,12 @@ class UsageLedger(Base):
     publish_channel_id: Mapped[str | None] = mapped_column(
         ForeignKey("publish_channels.id", ondelete="SET NULL", name="fk_usage_ledger_publish_channel_id"), index=True
     )
+    post_id: Mapped[str | None] = mapped_column(
+        ForeignKey("posts.id", ondelete="SET NULL", name="fk_usage_ledger_post_id"), index=True
+    )
+    comment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="SET NULL", name="fk_usage_ledger_comment_id"), index=True
+    )
     provider: Mapped[str] = mapped_column(String(32), default="")
     model_key: Mapped[str] = mapped_column(String(160), default="")
     status: Mapped[str] = mapped_column(String(16), index=True)
@@ -463,4 +469,85 @@ class MusicTrack(Base):
     # 停用後「自動挑選」不會選到
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ---------------------------------------------------------------- Phase 4 發佈與評論
+class SocialAccount(Base):
+    __tablename__ = "social_accounts"
+    __table_args__ = (UniqueConstraint("channel_id", "remote_profile", "platform"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    channel_id: Mapped[str] = mapped_column(ForeignKey("publish_channels.id"), index=True)
+    # 一份帳號檔案代表一個帳號群，可對應多個 Upload-Post profile / 平台。
+    profile_id: Mapped[str | None] = mapped_column(ForeignKey("brand_profiles.id", ondelete="SET NULL"), index=True)
+    remote_profile: Mapped[str] = mapped_column(String(160))
+    platform: Mapped[str] = mapped_column(String(16))
+    external_account_id: Mapped[str] = mapped_column(String(200))
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    handle: Mapped[str] = mapped_column(String(200), default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_suggest_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_suggest_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    auth_status: Mapped[str] = mapped_column(String(32), default="unknown")
+    capabilities: Mapped[list] = mapped_column(JSON, default=list)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Post(Base):
+    """一筆人工確認的發佈；固定 request_id 為 id。不確定回執只查詢，不能重送。"""
+
+    __tablename__ = "posts"
+    __table_args__ = (UniqueConstraint("tenant_id", "request_key"), Index("ix_posts_sync", "status", "next_comment_sync_at"))
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    video_id: Mapped[str | None] = mapped_column(ForeignKey("videos.id", ondelete="SET NULL"), index=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("social_accounts.id"), index=True)
+    request_key: Mapped[str] = mapped_column(String(36))
+    title: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(String(2200), default="")
+    hashtags: Mapped[list] = mapped_column(JSON, default=list)
+    is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=True)
+    schedule_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    # 保存被確認的成片版本與目的帳號，設定改變時要求重新確認。
+    video_sha256: Mapped[str] = mapped_column(String(64))
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    destination: Mapped[dict] = mapped_column(JSON)
+    remote_id: Mapped[str] = mapped_column(String(200), default="")
+    url: Mapped[str] = mapped_column(String(1000), default="")
+    error: Mapped[str] = mapped_column(String(500), default="")
+    confirmed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_comment_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    comments_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    comments_error: Mapped[str] = mapped_column(String(500), default="")
+    comment_cursor: Mapped[str] = mapped_column(String(1000), default="")
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    __table_args__ = (UniqueConstraint("post_id", "remote_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    post_id: Mapped[str] = mapped_column(ForeignKey("posts.id"), index=True)
+    remote_id: Mapped[str] = mapped_column(String(200))
+    author: Mapped[str] = mapped_column(String(200), default="")
+    text: Mapped[str] = mapped_column(Text)
+    intent: Mapped[str] = mapped_column(String(16), default="unknown", index=True)
+    suggested_reply: Mapped[str] = mapped_column(String(2000), default="")
+    ai_status: Mapped[str] = mapped_column(String(16), default="idle")
+    ai_error: Mapped[str] = mapped_column(String(500), default="")
+    # unreplied / sending / replied / failed / uncertain
+    reply_status: Mapped[str] = mapped_column(String(16), default="unreplied", index=True)
+    reply_text: Mapped[str] = mapped_column(String(2000), default="")
+    remote_reply_id: Mapped[str] = mapped_column(String(200), default="")
+    replied_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
