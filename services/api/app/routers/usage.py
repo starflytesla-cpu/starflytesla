@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.deps import DB, AdminUser
-from app.models import ModelChannel, UsageLedger, User
+from app.models import ModelChannel, PublishChannel, UsageLedger, User
 from app.schemas import micros_to_usd, ok
 
 router = APIRouter(prefix="/api", tags=["usage"])
@@ -22,7 +22,7 @@ def month_summary(db, tenant_id: str) -> dict:
             func.coalesce(func.sum(UsageLedger.cost_micros), 0),
             func.count().filter(UsageLedger.status == "failed"),
             func.count().filter(
-                UsageLedger.status == "succeeded", UsageLedger.cost_micros.is_(None)
+                UsageLedger.status.in_(("succeeded", "pending", "uncertain")), UsageLedger.cost_micros.is_(None)
             ),
         ).where(UsageLedger.tenant_id == tenant_id, UsageLedger.created_at >= month_start())
     ).one()
@@ -40,15 +40,16 @@ def list_usage(
     db: DB,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    status: str | None = Query(None, pattern="^(succeeded|failed)$"),
+    status: str | None = Query(None, pattern="^(succeeded|failed|pending|uncertain)$"),
 ):
     where = [UsageLedger.tenant_id == admin.tenant_id]
     if status:
         where.append(UsageLedger.status == status)
     total = db.scalar(select(func.count()).select_from(UsageLedger).where(*where))
     rows = db.execute(
-        select(UsageLedger, ModelChannel.name, User.display_name)
+        select(UsageLedger, func.coalesce(ModelChannel.name, PublishChannel.name), User.display_name)
         .outerjoin(ModelChannel, ModelChannel.id == UsageLedger.channel_id)
+        .outerjoin(PublishChannel, PublishChannel.id == UsageLedger.publish_channel_id)
         .outerjoin(User, User.id == UsageLedger.user_id)
         .where(*where)
         .order_by(UsageLedger.created_at.desc())
@@ -60,6 +61,8 @@ def list_usage(
             "id": entry.id,
             "created_at": entry.created_at.isoformat(),
             "action": entry.action,
+            "post_id": entry.post_id,
+            "comment_id": entry.comment_id,
             "source": entry.source,
             "channel_name": channel_name or "（已刪除）",
             "provider": entry.provider,

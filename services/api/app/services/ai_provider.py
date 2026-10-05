@@ -140,6 +140,12 @@ def _ledger(db: Session, model: ChannelModel, action: str, source: str, user: Us
         # 失敗的呼叫沒有產生用量，成本記為 0，而不是「價格未知」。
         entry.input_tokens = entry.output_tokens = 0
         entry.cost_micros = 0
+        if source in ("comment_suggest", "post_copy"):
+            # Phase 4 的新入口：逾時／格式不明不等於沒消耗用量；保留待核對與未知成本。
+            rejected = exc.reason == "upstream_auth" or getattr(exc, "upstream_status", None) in (400, 401, 403, 404, 422, 429)
+            if not rejected:
+                entry.status, entry.cost_micros = "uncertain", None
+            entry.error = "AI 服務拒絕請求，請檢查模型設定" if rejected else "AI 回執未確認，請核對供應商用量紀錄"
         raise
     finally:
         entry.duration_ms = int((time.monotonic() - started) * 1000)
@@ -166,7 +172,9 @@ def _send(method: str, url: str, api_key: str, body: dict | None = None, *, para
 
 def _json(response: httpx.Response) -> dict:
     if response.status_code >= 400:
-        raise upstream_error(_upstream_message(response))
+        error = upstream_error(_upstream_message(response))
+        error.upstream_status = response.status_code
+        raise error
     try:
         body = response.json()
     except ValueError:

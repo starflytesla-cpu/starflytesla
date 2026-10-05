@@ -4,13 +4,18 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.errors import conflict, not_found
-from app.models import Asset, MusicTrack, Script, Task, User, Video, utcnow
+from app.models import Asset, Comment, MusicTrack, Post, Script, Task, UsageLedger, User, Video, utcnow
+from app.services import posts
 
 TYPE_LABELS = {
     "asset.analyze": "素材分析",
     "script.generate": "產生文案",
     "video.render": "渲染成片",
     "music.generate": "產生背景音樂",
+    "publish.post": "發佈貼文",
+    "publish.reconcile": "核對發佈回執",
+    "comment.sync": "同步評論",
+    "comment.suggest": "評論分類與建議",
 }
 
 
@@ -22,6 +27,10 @@ def _target(task: Task) -> str:
         return payload.get("video_id", "")
     if task.type == "script.generate":
         return ",".join(payload.get("script_ids", []))
+    if task.type in ("publish.post", "publish.reconcile", "comment.sync"):
+        return payload.get("post_id", "")
+    if task.type == "comment.suggest":
+        return payload.get("comment_id", "")
     return payload.get("track_id", "")
 
 
@@ -49,6 +58,8 @@ def _labels(db: Session, rows: list[Task]) -> dict[str, str]:
     video_ids = {(t.payload or {}).get("video_id") for t in rows if t.type == "video.render"}
     script_ids = {(t.payload or {}).get("script_ids", [None])[0] for t in rows if t.type == "script.generate"}
     track_ids = {(t.payload or {}).get("track_id") for t in rows if t.type == "music.generate"}
+    post_ids = {(t.payload or {}).get("post_id") for t in rows if t.type in ("publish.post", "publish.reconcile", "comment.sync")}
+    comment_ids = {(t.payload or {}).get("comment_id") for t in rows if t.type == "comment.suggest"}
     names: dict[str, str] = {}
     if asset_ids:
         names.update(dict(db.execute(select(Asset.id, Asset.original_filename).where(Asset.id.in_(asset_ids))).all()))
@@ -61,10 +72,14 @@ def _labels(db: Session, rows: list[Task]) -> dict[str, str]:
             names[sid] = f"{template} · {profile}"
     if track_ids:
         names.update(dict(db.execute(select(MusicTrack.id, MusicTrack.title).where(MusicTrack.id.in_(track_ids))).all()))
+    if post_ids:
+        names.update(dict(db.execute(select(Post.id, Post.title).where(Post.id.in_(post_ids))).all()))
+    if comment_ids:
+        names.update({cid: content[:80] for cid, content in db.execute(select(Comment.id, Comment.text).where(Comment.id.in_(comment_ids))).all()})
     out = {}
     for t in rows:
         payload = t.payload or {}
-        key = payload.get("asset_id") or payload.get("video_id") or payload.get("track_id") or (payload.get("script_ids") or [None])[0]
+        key = payload.get("asset_id") or payload.get("video_id") or payload.get("track_id") or payload.get("post_id") or payload.get("comment_id") or (payload.get("script_ids") or [None])[0]
         out[t.id] = names.get(key, "（已刪除）")
     return out
 
@@ -93,10 +108,18 @@ def retry(db: Session, user: User, task_id: str) -> Task:
     if task.status != "failed":
         raise conflict("只有失敗的任務可以重試", "task_not_failed")
     payload = task.payload or {}
+    if task.type == "comment.suggest":
+        raise conflict("請先在評論收件匣核對原 AI 用量紀錄，不能重排已開始的付費請求", "ai_receipt_review_required")
+    if task.type == "publish.post" and (post := db.get(Post, payload.get("post_id"))) is not None:
+        if post.status == "failed":
+            if db.scalars(select(UsageLedger.id).where(UsageLedger.post_id == post.id, UsageLedger.action == "publish.post")).first():
+                raise conflict("此任務已送到供應商，請查詢原回執，不能重新上傳", "receipt_review_required")
+            post.status, post.error = "queued", ""
     # 對應的資料一起改回「處理中」狀態，畫面才會顯示進度
     if task.type == "asset.analyze" and (asset := db.get(Asset, payload.get("asset_id"))) is not None:
         asset.status, asset.stage, asset.error = "uploaded", "等待分析", ""
     elif task.type == "video.render" and (video := db.get(Video, payload.get("video_id"))) is not None:
+        posts.guard_video(db, video)
         video.status, video.stage, video.error = "queued", "排隊中", ""
     elif task.type == "music.generate" and (track := db.get(MusicTrack, payload.get("track_id"))) is not None:
         track.status, track.error = "generating", ""
@@ -106,7 +129,7 @@ def retry(db: Session, user: User, task_id: str) -> Task:
     task.status = "queued"
     task.attempts = 0
     task.error = ""
-    task.run_after = utcnow()
+    task.run_after = max(utcnow(), post.schedule_at) if task.type == "publish.post" and post is not None else utcnow()
     task.finished_at = None
     db.commit()
     return task

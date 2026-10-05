@@ -88,7 +88,6 @@ export const WORK_ITEMS: NavItem[] = [
     path: '/publish-accounts',
     label: '發佈帳號',
     icon: <SendOutlined />,
-    phase: 4,
     adminOnly: true,
     description: '綁定帳號群的 TikTok、Instagram、YouTube、Facebook 帳號（透過 Upload-Post）。',
   },
@@ -96,7 +95,6 @@ export const WORK_ITEMS: NavItem[] = [
     path: '/publish-tasks',
     label: '發佈任務',
     icon: <ScheduleOutlined />,
-    phase: 4,
     adminOnly: true,
     description: '審核通過的成片自動產生各平台標題與 hashtag，排程發佈並回填貼文網址。',
   },
@@ -104,7 +102,6 @@ export const WORK_ITEMS: NavItem[] = [
     path: '/comments',
     label: '評論管理',
     icon: <CommentOutlined />,
-    phase: 4,
     adminOnly: true,
     description: '自動拉取評論並分類（詢價 / 好評 / 問題 / 垃圾），AI 產生建議回覆，人工確認後送出。',
   },
@@ -112,6 +109,7 @@ export const WORK_ITEMS: NavItem[] = [
 
 export const SETTINGS_ITEMS: NavItem[] = [
   { path: '/settings/channels', label: '模型渠道', icon: <ApiOutlined />, adminOnly: true },
+  { path: '/settings/publish-channels', label: '發佈渠道', icon: <SendOutlined />, adminOnly: true },
   { path: '/settings/usage', label: '用量與成本', icon: <WalletOutlined />, adminOnly: true },
   { path: '/settings/users', label: '帳號管理', icon: <TeamOutlined />, adminOnly: true },
 ]

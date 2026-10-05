@@ -19,6 +19,10 @@ export class ApiError extends Error {
   }
 }
 
+export function errorText(error: unknown): string {
+  return error instanceof ApiError ? error.message : '操作失敗，請稍後再試'
+}
+
 const client = axios.create({ baseURL: '/api', withCredentials: true, timeout: 90_000 })
 
 function toApiError(error: unknown): ApiError {

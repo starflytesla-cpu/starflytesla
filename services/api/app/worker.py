@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_sessionmaker
 from app.models import Task, Upload, utcnow
-from app.services import asset_analyzer, media, music, renderer, script_writer, speech, tasks
+from app.services import asset_analyzer, comments, media, music, posts, renderer, script_writer, speech, tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("starfly.worker")
@@ -34,6 +34,10 @@ HANDLERS: dict[str, Callable[[Session, Task], dict]] = {
     script_writer.TASK_TYPE: script_writer.generate_task,
     renderer.TASK_TYPE: renderer.render_task,
     music.TASK_TYPE: music.generate_task,
+    "publish.post": posts.publish_task,
+    "publish.reconcile": posts.reconcile_task,
+    "comment.sync": comments.sync_task,
+    "comment.suggest": comments.suggest_task,
 }
 
 
@@ -88,7 +92,7 @@ class Worker:
                 media.SHUTDOWN.wait(2)
 
     def _heartbeat(self) -> None:
-        last_lease = last_cleanup = 0.0
+        last_lease = last_cleanup = last_comment_scan = 0.0
         while not media.SHUTDOWN.is_set():
             HEARTBEAT_FILE.touch()
             now = time.monotonic()
@@ -103,6 +107,10 @@ class Worker:
                     with get_sessionmaker()() as db:
                         cleanup(db)
                     last_cleanup = now
+                if now - last_comment_scan >= 60:
+                    with get_sessionmaker()() as db:
+                        comments.schedule_sync(db)
+                    last_comment_scan = now
             except Exception:
                 log.exception("背景維護失敗")
             media.SHUTDOWN.wait(10)
