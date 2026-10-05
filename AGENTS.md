@@ -16,6 +16,20 @@
 - 推送前一律 `git pull --rebase origin claude/exciting-fermi-nad1gj`；不要 force push、不要改寫已推送的歷史。
 - 大型或實驗性改動可以先開 `codex/<主題>` 分支，完成後 rebase 回共用分支。
 
+## 部署（不需要 SSH，也不要向使用者要伺服器終端機或密碼）
+
+伺服器只透過 GitHub Actions 的 **Ops** workflow（`.github/workflows/ops.yml` → `infra/scripts/ops.sh`）操作。觸發方式：GitHub → Actions → Ops → Run workflow，輸入指令；或用 GitHub API 的 workflow_dispatch。
+
+1. PR 的 CI 全部綠燈。
+2. 執行 Ops `backup`：備份資料庫到伺服器資料碟。
+3. 合併 PR 到 `claude/exciting-fermi-nad1gj`：CI 通過後 Ops 會自動 `deploy`。
+   - deploy 會在跑遷移前再備份一次。
+   - deploy 完成後自動跑 `smoke`。
+4. 執行 Ops `verify`：確認伺服器程式碼與 GitHub 一致、沒有被手動修改，並查看遷移版本。
+5. 需要時用 `queue`、`logs api 200`、`logs worker 200` 查問題。
+
+資料庫備份**只存在伺服器上**，絕對不要上傳到 GitHub（公開倉庫）。還原會覆蓋資料，要先取得使用者同意（步驟見 docs/05）。需要新的診斷能力時，修改 `ops.sh` 並推送，不要繞過它。
+
 ## Linear：開發過程與交接都在這裡
 
 - 專案：Linear → Eilveiaan 團隊 → 專案「工廠混剪自動化 WebApp」（P-EIL-2，隸屬 SocialOps 社媒运营）

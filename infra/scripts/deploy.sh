@@ -62,6 +62,15 @@ main() {
     fi
   done
 
+  # 新版啟動時會自動跑資料表遷移，所以一定要在這之前備份；備份失敗就中止部署。
+  # 緊急情況可用 DEPLOY_SKIP_BACKUP=1 略過（不建議）。
+  if [[ -n ${DEPLOY_SKIP_BACKUP:-} ]]; then
+    echo "==> 已略過部署前備份（DEPLOY_SKIP_BACKUP）"
+  else
+    echo "==> 部署前備份資料庫"
+    bash infra/scripts/backup.sh
+  fi
+
   echo "==> 建置並啟動服務（第一次約需 3～5 分鐘）"
   docker compose -f infra/docker-compose.yml --env-file .env \
     up -d --build --remove-orphans --wait --wait-timeout 600

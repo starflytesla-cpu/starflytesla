@@ -56,8 +56,9 @@
 雲端開發環境不能直接 SSH 到伺服器，改用 `.github/workflows/ops.yml`：
 
 - 用 GitHub MCP 的 `actions_run_trigger`（`run_workflow`，workflow `ops.yml`，ref `claude/exciting-fermi-nad1gj`，inputs `{"command": "..."}`）觸發，再用 `actions_list` / `get_job_logs` 讀結果。
-- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`queue`（任務佇列 / 素材狀態 / 最近錯誤）、`ai-check`（模型渠道概況；豆包方舟 Key 實測屬於 BytePlus 國際版或火山引擎中國區，不輸出 Key）、`logs <api|worker|web|postgres> [行數]`、`deploy`、`restart <api|worker|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
+- 可用指令只有 `infra/scripts/ops.sh` 定義的：`status`、`smoke`、`queue`（任務佇列 / 素材狀態 / 最近錯誤）、`ai-check`（模型渠道概況；豆包方舟 Key 實測屬於 BytePlus 國際版或火山引擎中國區，不輸出 Key）、`backup` / `backups`（資料庫備份到伺服器 `/data/backups/starfly`，deploy 前也會自動備份）、`verify`（伺服器程式碼是否與 GitHub 一致、有無手動修改、遷移版本）、`logs <api|worker|web|postgres> [行數]`、`deploy`、`restart <api|worker|web>`。需要新的診斷能力時，修改 ops.sh（輸出不得包含密碼、`.env` 內容；IP / Email 要經過 `redact`），推送後經 CI 自動部署生效。
 - 推送到 `claude/exciting-fermi-nad1gj` 且 CI 通過後，Ops 會自動執行 `deploy`（部署完會跑 `smoke`）。
+- **資料庫備份絕不放 GitHub**（公開倉庫的 artifact 任何人都能下載）；只存在伺服器資料碟。還原要先取得使用者同意，步驟見 docs/05「資料庫備份與還原」。
 - 需要使用者先在伺服器執行 `setup-ops.sh` 並設定 `OPS_HOST` / `OPS_KNOWN_HOSTS` / `OPS_SSH_KEY` 三個 Secrets；未設定時 workflow 會顯示警告並略過。
 - 這台伺服器的主機商模板預設**關閉金鑰登入**（回應 `Permission denied (password)`），需在伺服器執行 `bash infra/scripts/enable-ssh-key.sh` 開啟（2026-09-30 已請使用者執行）。
 

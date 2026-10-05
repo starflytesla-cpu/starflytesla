@@ -82,7 +82,7 @@ docker compose -f infra/docker-compose.yml logs --tail 100 api
 
 設定一次之後，Claude 可以自己觸發 GitHub Actions 在伺服器上查狀態、看記錄、部署、重啟，並讀取結果，不需要使用者中轉。推送的程式碼通過 CI 後也會自動部署。
 
-安全設計：專用金鑰在伺服器上被鎖定成**只能執行 `infra/scripts/ops.sh` 的固定指令**（status / smoke / queue / logs / deploy / restart），不能開 shell、不能轉發 port；輸出會遮罩 IP 與 Email，也不會印出任何密碼（倉庫是公開的，Actions 記錄任何人都看得到）。
+安全設計：專用金鑰在伺服器上被鎖定成**只能執行 `infra/scripts/ops.sh` 的固定指令**（status / smoke / queue / ai-check / backup / backups / verify / logs / deploy / restart），不能開 shell、不能轉發 port；輸出會遮罩 IP 與 Email，也不會印出任何密碼（倉庫是公開的，Actions 記錄任何人都看得到）。
 
 ### 一次性設定（約 3 分鐘）
 
@@ -106,7 +106,57 @@ docker compose -f infra/docker-compose.yml logs --tail 100 api
 
 - Claude 透過 GitHub 介面觸發 **Ops** workflow 並讀取記錄。
 - 使用者也可以手動執行：GitHub → Actions → Ops → Run workflow，輸入 `status`、`smoke`、`queue`（素材分析佇列）、`logs api 200`、`logs worker 200`、`deploy` 或 `restart worker`。
+- `backup` 立即備份資料庫、`backups` 列出備份、`verify` 確認伺服器程式碼與 GitHub 一致且沒有被手動修改。
+- Codex 或其他協作者部署**不需要 SSH**：PR 的 CI 綠燈 → 執行 `backup` → 合併到 `claude/exciting-fermi-nad1gj` → 自動部署（部署本身也會先備份）→ `verify`。
 - 要停用：在伺服器上刪除 `/root/.ssh/authorized_keys` 裡結尾為 `github-actions-ops` 的那一行，或刪除 GitHub 上的 `OPS_SSH_KEY`。
+
+## 資料庫備份與還原
+
+- **自動備份**：`deploy.sh` 在啟動新版（會跑資料表遷移）之前，先執行 `infra/scripts/backup.sh`；備份失敗就中止部署。
+- **存放位置**：伺服器資料碟 `/data/backups/starfly/db-<UTC 時間>-<當時版本>.dump`（權限 700 / 600），保留最近 14 份。
+- **不上傳 GitHub**：倉庫是公開的，公開倉庫的 Actions artifact 任何登入 GitHub 的人都能下載，而備份裡有帳號、密碼雜湊與加密後的 API Key。
+- **SECRET_KEY**：API Key 要用同一台伺服器 `.env` 的 `SECRET_KEY` 才能解密，`.env` 不在備份檔裡，請另外妥善保存。
+- **不含素材**：素材檔（`/media`）不在備份範圍。
+
+### 還原
+
+還原會覆蓋目前的資料，**必須先取得使用者同意**，再登入伺服器手動執行。以下每一步都在專案目錄 `/root/starflytesla` 執行：
+
+1. 先備份目前的狀態，留後路：
+
+   ```bash
+   bash infra/scripts/backup.sh
+   ```
+
+2. 列出現有備份，找出要還原的檔名：
+
+   ```bash
+   bash infra/scripts/backup.sh --list
+   ```
+
+3. 停止 api 和 worker：
+
+   ```bash
+   docker compose -f infra/docker-compose.yml --env-file .env stop api worker
+   ```
+
+4. 還原資料庫，把 `<檔名>` 換成第 2 步的檔名：
+
+   ```bash
+   docker compose -f infra/docker-compose.yml --env-file .env exec -T postgres \
+     sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+     < /data/backups/starfly/<檔名>
+   ```
+
+5. 如果要退回舊版程式碼：用 `git checkout <檔名中的版本>` 切到那個版本，再執行 `docker compose -f infra/docker-compose.yml --env-file .env up -d --build --wait`。
+   - 只有這種情況做這一步；不退版本就跳過。
+   - 之後回到正常狀態：`git checkout claude/exciting-fermi-nad1gj`，再部署。
+
+6. 重新啟動 api 和 worker：
+
+   ```bash
+   docker compose -f infra/docker-compose.yml --env-file .env start api worker
+   ```
 
 ## 網域與 HTTPS
 

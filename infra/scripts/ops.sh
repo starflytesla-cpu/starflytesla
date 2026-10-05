@@ -9,7 +9,10 @@
 #   logs <服務> [行數]      服務：api / worker / web / postgres；行數最多 500；IP 與 Email 會遮罩
 #   queue                  背景任務佇列、素材與成片狀態統計、最近的失敗原因
 #   ai-check               模型渠道概況；豆包方舟渠道實測 Key 屬於 BytePlus 或火山引擎（不輸出 Key）
-#   deploy                 執行 deploy.sh，完成後自動跑 smoke
+#   deploy                 執行 deploy.sh（會先備份資料庫），完成後自動跑 smoke
+#   backup                 立即備份資料庫到伺服器資料碟（不上傳到任何地方）
+#   backups                列出資料庫備份與磁碟剩餘空間
+#   verify                 伺服器程式碼版本、是否與 GitHub 一致、有無被手動修改的檔案
 #   restart <服務>          重啟 api / worker / web
 #
 # 倉庫是公開的，Actions 記錄任何人都看得到：絕對不要在這裡輸出 .env 或任何密碼。
@@ -115,6 +118,32 @@ cmd_ai_check() {
   "${COMPOSE[@]}" exec -T api python -m app.diagnostics 2>&1 | redact
 }
 
+cmd_verify() {
+  local head remote_head
+  head=$(git rev-parse HEAD)
+  echo "== 伺服器程式碼"
+  git log -1 --format='  %h %ci %s'
+  echo "  分支：$(git rev-parse --abbrev-ref HEAD)"
+  echo "== 與 GitHub 比較"
+  if git fetch --quiet origin 2>/dev/null; then
+    remote_head=$(git rev-parse '@{upstream}' 2>/dev/null || echo "")
+    if [[ $head == "$remote_head" ]]; then
+      echo "  與 GitHub 最新版一致（${head:0:7}）"
+    else
+      echo "  GitHub 最新：${remote_head:0:7}；落後 $(git rev-list --count HEAD..'@{upstream}') 個 commit、領先 $(git rev-list --count '@{upstream}'..HEAD) 個"
+    fi
+  else
+    echo "  [警告] 無法連線 GitHub，略過比較"
+  fi
+  echo "== 被手動修改的追蹤檔案（應為空）"
+  git status --porcelain --untracked-files=no | sed 's/^/  /'
+  git diff --quiet HEAD && echo "  （沒有）"
+  echo "== 正在執行的版本（最近部署）"
+  tail -1 .deploy-history.log 2>/dev/null | awk '{print "  " $1 " " substr($2, 1, 7)}' || echo "  （沒有記錄）"
+  echo "== 資料表遷移版本"
+  "${COMPOSE[@]}" exec -T api alembic current 2>/dev/null | sed 's/^/  /' || echo "  （無法讀取）"
+}
+
 cmd_logs() {
   local service=${1:-} lines=${2:-100}
   [[ $service =~ ^(api|worker|web|postgres)$ ]] || { echo "服務只能是 api / worker / web / postgres" >&2; exit 2; }
@@ -146,6 +175,9 @@ main() {
       cmd_smoke
       ;;
     restart) cmd_restart "${args[1]:-}" ;;
+    backup) bash infra/scripts/backup.sh ;;
+    backups) bash infra/scripts/backup.sh --list ;;
+    verify) cmd_verify ;;
     *)
       echo "不支援的指令：${args[0]:-（空白）}" >&2
       exit 2
