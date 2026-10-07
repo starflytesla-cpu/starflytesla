@@ -8,7 +8,7 @@ import {
   CaretRightOutlined,
 } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Progress, Space, Typography } from 'antd'
+import { App, Button, Card, Collapse, Grid, Progress, Space, Typography } from 'antd'
 import { useEffect, useRef, type ChangeEvent } from 'react'
 import { formatBytes } from '../../api'
 import { uploadStore, useUploads } from './uploadStore'
@@ -17,6 +17,7 @@ const ACCEPTED = /\.(mp4|mov|m4v|webm|mkv|avi|3gp|mts|jpe?g|png|webp)$/i
 
 export default function UploadPanel() {
   const { message } = App.useApp()
+  const screens = Grid.useBreakpoint()
   const queryClient = useQueryClient()
   const items = useUploads()
   const cameraInput = useRef<HTMLInputElement>(null)
@@ -63,54 +64,84 @@ export default function UploadPanel() {
       </div>
 
       {items.length > 0 ? (
-        <div className="upload-list">
-          {items.map((item) => (
-            <div key={item.key} className="upload-item">
-              <div className="upload-item-head">
-                <Typography.Text ellipsis className="upload-name">
-                  {item.state === 'done' ? <CheckCircleFilled className="ok-icon" /> : null} {item.name}
-                </Typography.Text>
-                <Space size={4}>
-                  {item.state === 'uploading' ? (
-                    <Button size="small" type="text" icon={<PauseOutlined />} onClick={() => uploadStore.pause(item.key)} aria-label="暫停" />
-                  ) : null}
-                  {item.state === 'paused' ? (
-                    <Button size="small" type="text" icon={<CaretRightOutlined />} onClick={() => uploadStore.resume(item.key)} aria-label="繼續" />
-                  ) : null}
-                  {item.state === 'error' ? (
-                    <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => uploadStore.resume(item.key)}>
-                      重試
+        <Collapse
+          defaultActiveKey={screens.md ? [] : ['queue']}
+          items={[
+            {
+              key: 'queue',
+              label: `上傳佇列 · ${items.length} 個檔案 · ${doneCount} 已完成`,
+              children: (
+                <div className="upload-list">
+                  {items.map((item) => (
+                    <div key={item.key} className="upload-item">
+                      <div className="upload-item-head">
+                        <Typography.Text ellipsis className="upload-name">
+                          {item.state === 'done' ? <CheckCircleFilled className="ok-icon" /> : null} {item.name}
+                        </Typography.Text>
+                        <Space size={4}>
+                          {item.state === 'uploading' ? (
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<PauseOutlined />}
+                              onClick={() => uploadStore.pause(item.key)}
+                              aria-label="暫停"
+                            />
+                          ) : null}
+                          {item.state === 'paused' ? (
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<CaretRightOutlined />}
+                              onClick={() => uploadStore.resume(item.key)}
+                              aria-label="繼續"
+                            />
+                          ) : null}
+                          {item.state === 'error' ? (
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<ReloadOutlined />}
+                              onClick={() => uploadStore.resume(item.key)}
+                            >
+                              重試
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<CloseOutlined />}
+                            onClick={() => uploadStore.remove(item.key)}
+                            aria-label="移除"
+                          />
+                        </Space>
+                      </div>
+                      <Progress
+                        percent={item.size ? Math.floor((item.sent / item.size) * 100) : 0}
+                        size="small"
+                        status={item.state === 'error' ? 'exception' : item.state === 'done' ? 'success' : 'active'}
+                      />
+                      <Typography.Text type={item.state === 'error' ? 'danger' : 'secondary'} className="small">
+                        {item.state === 'error'
+                          ? item.error
+                          : item.state === 'done'
+                            ? '上傳完成，系統正在分析'
+                            : item.state === 'paused'
+                              ? `已暫停（${formatBytes(item.sent)} / ${formatBytes(item.size)}）`
+                              : `${formatBytes(item.sent)} / ${formatBytes(item.size)}`}
+                      </Typography.Text>
+                    </div>
+                  ))}
+                  {doneCount > 0 ? (
+                    <Button type="link" size="small" onClick={() => uploadStore.clearDone()}>
+                      清除已完成（{doneCount}）
                     </Button>
                   ) : null}
-                  <Button size="small" type="text" icon={<CloseOutlined />} onClick={() => uploadStore.remove(item.key)} aria-label="移除" />
-                </Space>
-              </div>
-              <Progress
-                percent={item.size ? Math.floor((item.sent / item.size) * 100) : 0}
-                size="small"
-                status={item.state === 'error' ? 'exception' : item.state === 'done' ? 'success' : 'active'}
-              />
-              <Typography.Text type={item.state === 'error' ? 'danger' : 'secondary'} className="small">
-                {item.state === 'error'
-                  ? item.error
-                  : item.state === 'done'
-                    ? '上傳完成，系統正在分析'
-                    : item.state === 'paused'
-                      ? `已暫停（${formatBytes(item.sent)} / ${formatBytes(item.size)}）`
-                      : `${formatBytes(item.sent)} / ${formatBytes(item.size)}`}
-              </Typography.Text>
-            </div>
-          ))}
-          {doneCount > 0 ? (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => uploadStore.clearDone()}
-            >
-              清除已完成（{doneCount}）
-            </Button>
-          ) : null}
-        </div>
+                </div>
+              ),
+            },
+          ]}
+        />
       ) : null}
     </Card>
   )

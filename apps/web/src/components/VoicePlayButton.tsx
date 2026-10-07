@@ -17,12 +17,21 @@ export default function VoicePlayButton({ voice, ...props }: { voice: Voice } & 
   const cached = queryClient.getQueryData<string>(['voice-sample', voice.id])
   const url = voice.preview_url ?? cached
 
-  if (url) return <AudioButton url={url} {...props} />
+  if (url)
+    return (
+      <AudioButton
+        url={url}
+        {...props}
+        title={voice.preview_url ? '播放官方試聽（免費）' : '播放已產生樣本'}
+        aria-label={`播放 ${voice.name} 已有試聽`}
+      />
+    )
   return (
     <Button
       icon={<PlayCircleOutlined />}
       loading={loading}
-      aria-label="試聽"
+      aria-label={`產生 ${voice.name} 試聽（計費）`}
+      title="第一次產生樣本會計費，之後重用已有樣本"
       onClick={async (event) => {
         event.stopPropagation()
         setLoading(true)

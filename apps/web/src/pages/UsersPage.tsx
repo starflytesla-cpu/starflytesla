@@ -1,11 +1,12 @@
 import { EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Form, Input, Modal, Select, Switch, Table, Tag } from 'antd'
+import { App, Button, Card, Form, Grid, Input, Modal, Select, Space, Switch, Table, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { api, type Role, type User } from '../api'
 import { ApiError } from '../api/http'
 import { useMe } from '../useMe'
+import QueryFeedback from '../components/QueryFeedback'
 import PageHeader from '../components/PageHeader'
 
 const ROLE_OPTIONS = [
@@ -21,10 +22,14 @@ interface FormValues {
 }
 
 export default function UsersPage() {
+  const screens = Grid.useBreakpoint()
   const { data: me } = useMe()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const { data, isPending } = useQuery({ queryKey: ['users'], queryFn: api.users })
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: ['users'],
+    queryFn: api.users,
+  })
   const [target, setTarget] = useState<User | 'new' | null>(null)
   const [form] = Form.useForm<FormValues>()
   const [saving, setSaving] = useState(false)
@@ -78,42 +83,75 @@ export default function UsersPage() {
           </Button>
         }
       />
+      <QueryFeedback error={error} retry={refetch} />
       <Card>
-        <Table<User>
-          rowKey="id"
-          loading={isPending}
-          dataSource={data ?? []}
-          pagination={false}
-          scroll={{ x: 720 }}
-          columns={[
-            { title: '名稱', dataIndex: 'display_name' },
-            { title: 'Email', dataIndex: 'email' },
-            {
-              title: '角色',
-              dataIndex: 'role',
-              render: (role: Role) => (role === 'admin' ? <Tag color="blue">管理員</Tag> : <Tag>拍攝員</Tag>),
-            },
-            {
-              title: '最後登入',
-              dataIndex: 'last_login_at',
-              render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '從未登入'),
-            },
-            {
-              title: '啟用',
-              render: (_, u) => (
-                <Switch checked={u.is_active} disabled={u.id === me?.id} onChange={(v) => toggleActive(u, v)} />
-              ),
-            },
-            {
-              title: '操作',
-              render: (_, u) => (
-                <Button size="small" icon={<EditOutlined />} onClick={() => setTarget(u)}>
-                  編輯
-                </Button>
-              ),
-            },
-          ]}
-        />
+        {screens.md ? (
+          <Table<User>
+            rowKey="id"
+            loading={isPending}
+            dataSource={data ?? []}
+            pagination={false}
+            scroll={{ x: 720 }}
+            columns={[
+              { title: '名稱', dataIndex: 'display_name' },
+              { title: 'Email', dataIndex: 'email' },
+              {
+                title: '角色',
+                dataIndex: 'role',
+                render: (role: Role) => (role === 'admin' ? <Tag color="blue">管理員</Tag> : <Tag>拍攝員</Tag>),
+              },
+              {
+                title: '最後登入',
+                dataIndex: 'last_login_at',
+                render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '從未登入'),
+              },
+              {
+                title: '啟用',
+                render: (_, u) => (
+                  <Switch
+                    aria-label={`啟用 ${u.display_name}`}
+                    checked={u.is_active}
+                    disabled={u.id === me?.id}
+                    onChange={(v) => toggleActive(u, v)}
+                  />
+                ),
+              },
+              {
+                title: '操作',
+                render: (_, u) => (
+                  <Button size="small" icon={<EditOutlined />} onClick={() => setTarget(u)}>
+                    編輯
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        ) : (
+          <div className="record-list">
+            {data?.map((u) => (
+              <div className="compact-record" key={u.id}>
+                <strong>{u.display_name}</strong>
+                <span className="break-word">{u.email}</span>
+                <Tag color={u.role === 'admin' ? 'blue' : 'default'}>{u.role === 'admin' ? '管理員' : '拍攝員'}</Tag>
+                <span className="small muted">
+                  最後登入：
+                  {u.last_login_at ? dayjs(u.last_login_at).format('YYYY-MM-DD HH:mm') : '從未登入'}
+                </span>
+                <Space wrap>
+                  <Switch
+                    aria-label={`啟用 ${u.display_name}`}
+                    checked={u.is_active}
+                    disabled={u.id === me?.id}
+                    onChange={(v) => {
+                      void toggleActive(u, v)
+                    }}
+                  />
+                  <Button onClick={() => setTarget(u)}>編輯</Button>
+                </Space>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
       <Modal
         title={isNew ? '新增帳號' : '編輯帳號'}
@@ -129,9 +167,27 @@ export default function UsersPage() {
             form={form}
             layout="vertical"
             requiredMark={false}
-            initialValues={isNew ? { role: 'shooter' } : { email: target.email, display_name: target.display_name, role: target.role }}
+            initialValues={
+              isNew
+                ? { role: 'shooter' }
+                : {
+                    email: target.email,
+                    display_name: target.display_name,
+                    role: target.role,
+                  }
+            }
           >
-            <Form.Item name="email" label="Email（登入帳號）" rules={[{ required: true, type: 'email', message: '請輸入正確的 Email' }]}>
+            <Form.Item
+              name="email"
+              label="Email（登入帳號）"
+              rules={[
+                {
+                  required: true,
+                  type: 'email',
+                  message: '請輸入正確的 Email',
+                },
+              ]}
+            >
               <Input disabled={!isNew} autoComplete="off" />
             </Form.Item>
             <Form.Item name="display_name" label="名稱" rules={[{ required: true, message: '請輸入名稱' }]}>
@@ -144,7 +200,11 @@ export default function UsersPage() {
               name="password"
               label={isNew ? '密碼' : '重設密碼'}
               extra={isNew ? '至少 8 個字元' : '留空代表不修改；重設後該帳號會被登出'}
-              rules={isNew ? [{ required: true, min: 8, message: '密碼至少 8 個字元' }] : [{ min: 8, message: '密碼至少 8 個字元' }]}
+              rules={
+                isNew
+                  ? [{ required: true, min: 8, message: '密碼至少 8 個字元' }]
+                  : [{ min: 8, message: '密碼至少 8 個字元' }]
+              }
             >
               <Input.Password autoComplete="new-password" />
             </Form.Item>

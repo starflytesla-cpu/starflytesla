@@ -7,7 +7,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router'
 import { api } from '../api'
 import { useMe } from '../useMe'
 import ChangePasswordModal from '../components/ChangePasswordModal'
-import { SETTINGS_ITEMS, WORK_ITEMS, type NavItem } from '../navigation'
+import { NAV_GROUPS, SETTINGS_ITEMS, WORK_ITEMS, type NavItem } from '../navigation'
 
 const { Sider, Header, Content } = Layout
 
@@ -38,7 +38,14 @@ export default function AppLayout() {
   const isAdmin = me?.role === 'admin'
   const visible = (item: NavItem) => isAdmin || !item.adminOnly
   const items: MenuProps['items'] = [
-    ...WORK_ITEMS.filter(visible).map(toMenuItem),
+    ...NAV_GROUPS.map((group) => ({
+      type: 'group' as const,
+      key: group.label,
+      label: group.label,
+      children: group.paths.flatMap((path) =>
+        WORK_ITEMS.filter((item) => item.path === path && visible(item)).map(toMenuItem),
+      ),
+    })).filter((group) => group.children.length > 0),
     ...(isAdmin
       ? [
           { type: 'divider' as const },
@@ -107,14 +114,22 @@ export default function AppLayout() {
           {isMobile ? (
             <Button type="text" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} aria-label="開啟選單" />
           ) : (
-            <span />
+            <span className="header-location">
+              Starfly <span>/</span>{' '}
+              {[...WORK_ITEMS, ...SETTINGS_ITEMS].find((i) => i.path === location.pathname)?.label}
+            </span>
           )}
           <Dropdown
             trigger={['click']}
             menu={{
               items: [
                 { key: 'password', icon: <KeyOutlined />, label: '修改密碼' },
-                { key: 'logout', icon: <LogoutOutlined />, label: '登出', danger: true },
+                {
+                  key: 'logout',
+                  icon: <LogoutOutlined />,
+                  label: '登出',
+                  danger: true,
+                },
               ],
               onClick: ({ key }) => (key === 'logout' ? logout() : setPasswordOpen(true)),
             }}

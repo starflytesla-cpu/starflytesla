@@ -23,6 +23,7 @@
 - `docs/04-roadmap.md`：執行方案、階段、成本
 - `docs/05-server-setup.md`：伺服器初始化
 - `docs/06-codex-handoff.md`：Codex 接手範圍、全議題索引、已驗證與未完成事項（2026-10-05）
+- `docs/07-ui-upgrade.md`：EIL-79 全站 UI 升級範圍、資料口徑、合成驗收與上線檢查（2026-10-07）
 
 ## 程式結構與慣例
 
@@ -35,7 +36,8 @@
 - 成片：`renderer.py`（worker 任務 `video.render`）負責挑素材、配音快取、ASS 字幕與渲染；長度一律以影格（30fps）計算，片段只輸出影像、聲音另做無損 WAV，最後由 `media.compose_final` 一次合成（不要再用 concat demuxer 串接含 AAC 的片段，會卡頓）；背景音樂在 `music.py`（上傳 / kie Suno 產生、`pick_for_video`）；API 邏輯在 `videos.py`；任務中心在 `task_center.py`。渲染用的 FFmpeg 指令同樣集中在 `media.py`。
 - 素材檔案在 `MEDIA_ROOT`（容器內 `/media`），網址 `/media/{tenant}/assets|videos/{id}/...` 與 `/media/{tenant}/tts/...` 由 Caddy 經 `/api/media/auth` 檢查權限後直接提供。場景分類代碼在 `asset_analyzer.SCENES`，前端 `SCENE_LABELS` 要同步。
 - `apps/web/`：API 只透過 `src/api/http.ts` 的 `http` 呼叫（唯一例外：上傳用 `src/api/upload.ts` 的 tus-js-client）；型別與端點集中在 `src/api/index.ts`；選單與後續功能預留頁在 `src/navigation.tsx`。
-- 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫與 ffmpeg）；前端 `npm run lint && npm run build`；CI 會在推送時自動跑。
+- 前端 UI：沿用 Ant Design 單一元件系統；淺色主題在 `src/main.tsx`／`src/styles.css`，共通指標與讀取錯誤在 `MetricCard`／`QueryFeedback`。成本圖只使用按需引入的 ECharts，`CostCharts` 由用量頁動態載入；顯示格式／失敗占比在 `src/api/usageMetrics.ts`，不改帳本精度或 API 口徑。
+- 驗證：後端 `python -m pytest -q`（需要本機 PostgreSQL 的 `starfly_test` 資料庫與 ffmpeg）；前端 `npm run lint && npm test && npm run build`；CI 會在推送時自動跑。
 
 ## Linear 協作（與 Codex 共同開發）
 
@@ -92,6 +94,8 @@
 
 ## 目前進度
 
+- [x] EIL-79 全站 UI 升級程式與本機驗證完成（2026-10-07）：共通主題、分組導覽、真實工作待辦、成本圖、製作／審核／發佈／評論及資源頁；保留現有 API 與人工確認。完整後端 162 項、前端 lint／3 項成本口徑測試／build 通過；詳見 `docs/07-ui-upgrade.md`。
+- [ ] EIL-79 正式部署與真實操作驗收：候選版本需經 PR／CI、Ops backup、部署／verify 與正式頁面讀回；本機合成畫面不是正式資料或真實付費／公開操作證據。
 - [x] 調研、架構、執行方案、VPS 選購
 - [x] 伺服器初始化與壓測（2026-09-30）：steal 0%，30 秒成片約 30 秒渲染；專案 clone 在伺服器的 `/root/starflytesla`
 - [x] Phase 0 程式完成（2026-09-30）：登入 / 帳號、模型渠道、`ai_provider` + `usage_ledger`、後台網頁、Caddy、deploy.sh 自動產生密碼
@@ -106,4 +110,5 @@
 - [ ] Phase 3 驗收：用真實素材與文案產生成片並審核（2026-10-01 使用者回報背景聲不一致與卡頓，已改為統一背景音樂與影格精確渲染，待重新驗收）
 - [ ] 網域：使用者尚未提供；需要一筆 A 記錄指向伺服器 IP
 - [x] Phase 4 程式完成（EIL-16～19，2026-10-05）：渠道加密設定、驗證後的帳號對應、人工確認排程、回執恢復與成本帳本、定期評論同步與 AI 建議、人工確認回覆（遷移 0009、0010）。完整後端 162 項與前端 lint/build、Shellcheck、Alembic 檢查通過；見 [草稿 PR #1](https://github.com/starflytesla-cpu/starflytesla/pull/1) 與 `docs/06-codex-handoff.md`。
-- [ ] Phase 4 正式部署與真實驗收：使用者尚未準備 Upload-Post 帳號／Key；未合併、未部署、未對外發佈／回覆。等待帳號準備後再驗收連續一週的排程與評論流程。
+- [x] Phase 4 正式部署（2026-10-05）：PR #1 合併為 `bab351e`，經 CI、Ops backup／deploy／smoke／verify 完成；部署版本與 GitHub 一致、遷移為 `0010 (head)`。證據見 Linear〈交接總覽〉的「最新部署狀態」。
+- [ ] Phase 4 真實服務驗收：使用者尚未準備 Upload-Post 帳號／Key；未對外發佈／回覆。等待帳號準備後再驗收連續一週的排程與評論流程。

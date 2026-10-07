@@ -8,6 +8,8 @@ import {
   Col,
   Empty,
   Form,
+  Grid,
+  Space,
   Input,
   Popconfirm,
   Progress,
@@ -24,6 +26,7 @@ import { api, formatDuration, MUSIC_PRESETS, type MusicTrack } from '../api'
 import { ApiError } from '../api/http'
 import { createUpload, startOrResume } from '../api/upload'
 import AudioButton from '../components/AudioButton'
+import QueryFeedback from '../components/QueryFeedback'
 import PageHeader from '../components/PageHeader'
 
 function errorText(error: unknown) {
@@ -32,12 +35,20 @@ function errorText(error: unknown) {
 
 export default function MusicPage() {
   const { message } = App.useApp()
+  const screens = Grid.useBreakpoint()
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState<{ name: string; percent: number } | null>(null)
-  const [form] = Form.useForm<{ preset: string; extra: string; title: string }>()
+  const [uploading, setUploading] = useState<{
+    name: string
+    percent: number
+  } | null>(null)
+  const [form] = Form.useForm<{
+    preset: string
+    extra: string
+    title: string
+  }>()
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ['music'],
     queryFn: api.music,
     refetchInterval: (q) => (q.state.data?.items.some((t) => t.status === 'generating') ? 5000 : false),
@@ -54,7 +65,8 @@ export default function MusicPage() {
     onError: (e) => message.error(errorText(e)),
   })
   const update = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Partial<{ title: string; is_active: boolean }> }) => api.updateMusic(id, body),
+    mutationFn: ({ id, body }: { id: string; body: Partial<{ title: string; is_active: boolean }> }) =>
+      api.updateMusic(id, body),
     onSuccess: () => void refresh(),
     onError: (e) => message.error(errorText(e)),
   })
@@ -75,7 +87,11 @@ export default function MusicPage() {
     const upload = createUpload(
       file,
       {
-        onProgress: (sent, total) => setUploading({ name: file.name, percent: Math.floor((sent / total) * 100) }),
+        onProgress: (sent, total) =>
+          setUploading({
+            name: file.name,
+            percent: Math.floor((sent / total) * 100),
+          }),
         onSuccess: () => {
           setUploading(null)
           message.success('音樂已加入')
@@ -100,6 +116,7 @@ export default function MusicPage() {
         title="背景音樂"
         subtitle="成片從頭到尾使用同一首背景音樂，配音時自動壓低音量。可以上傳自己的音樂，或用 AI 產生免版權純音樂"
       />
+      <QueryFeedback error={error} retry={refetch} />
       {data && ready === 0 ? (
         <Alert
           className="section"
@@ -114,9 +131,15 @@ export default function MusicPage() {
           <Card title="上傳音樂" className="full-height">
             <input ref={fileInput} type="file" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg" hidden onChange={onPick} />
             <Typography.Paragraph type="secondary" className="small">
-              支援 mp3、m4a、wav，單檔 50 MB 以內。請使用有授權的音樂（例如 YouTube 音效庫、自己購買的版權音樂），避免發佈後被平台靜音。
+              支援 mp3、m4a、wav，單檔 50 MB 以內。請使用有授權的音樂（例如 YouTube
+              音效庫、自己購買的版權音樂），避免發佈後被平台靜音。
             </Typography.Paragraph>
-            <Button type="primary" icon={<UploadOutlined />} onClick={() => fileInput.current?.click()} disabled={!!uploading}>
+            <Button
+              type="primary"
+              icon={<UploadOutlined />}
+              onClick={() => fileInput.current?.click()}
+              disabled={!!uploading}
+            >
               選擇音樂檔
             </Button>
             {uploading ? (
@@ -150,8 +173,13 @@ export default function MusicPage() {
               <Form.Item name="extra" label="補充描述（選填，英文效果較好）">
                 <Input maxLength={300} placeholder="例如 120 bpm, guitar, uplifting" />
               </Form.Item>
-              <Button type="primary" icon={<CustomerServiceOutlined />} loading={generate.isPending} onClick={() => form.submit()}>
-                產生 2 首
+              <Button
+                type="primary"
+                icon={<CustomerServiceOutlined />}
+                loading={generate.isPending}
+                onClick={() => form.submit()}
+              >
+                產生 2 首（計費）
               </Button>
               <Typography.Text type="secondary" className="small music-note">
                 約 1～3 分鐘，使用 kie.ai 點數
@@ -164,76 +192,143 @@ export default function MusicPage() {
       <Card title={`音樂庫（${tracks.length}）`}>
         {data && tracks.length === 0 ? <Empty description="還沒有音樂" /> : null}
         {tracks.length ? (
-          <Table<MusicTrack>
-            rowKey="id"
-            size="small"
-            loading={isPending}
-            dataSource={tracks}
-            pagination={false}
-            scroll={{ x: 640 }}
-            columns={[
-              {
-                title: '',
-                width: 56,
-                render: (_, t) =>
-                  t.audio_url ? (
-                    <AudioButton url={t.audio_url} shape="circle" type="primary" />
-                  ) : t.status === 'generating' ? (
-                    <LoadingOutlined />
-                  ) : null,
-              },
-              {
-                title: '名稱',
-                render: (_, t) => (
-                  <div>
-                    <Typography.Text
-                      editable={
-                        t.status === 'ready'
-                          ? { onChange: (title) => title !== t.title && update.mutate({ id: t.id, body: { title } }) }
-                          : false
-                      }
+          screens.md ? (
+            <Table<MusicTrack>
+              rowKey="id"
+              size="small"
+              loading={isPending}
+              dataSource={tracks}
+              pagination={false}
+              scroll={{ x: 640 }}
+              columns={[
+                {
+                  title: '',
+                  width: 56,
+                  render: (_, t) =>
+                    t.audio_url ? (
+                      <AudioButton url={t.audio_url} shape="circle" type="primary" />
+                    ) : t.status === 'generating' ? (
+                      <LoadingOutlined />
+                    ) : null,
+                },
+                {
+                  title: '名稱',
+                  render: (_, t) => (
+                    <div>
+                      <Typography.Text
+                        editable={
+                          t.status === 'ready'
+                            ? {
+                                onChange: (title) => title !== t.title && update.mutate({ id: t.id, body: { title } }),
+                              }
+                            : false
+                        }
+                      >
+                        {t.title}
+                      </Typography.Text>
+                      {t.status === 'generating' ? <div className="small muted">AI 產生中…</div> : null}
+                      {t.status === 'failed' || (t.error && t.status === 'generating') ? (
+                        <div className="small">
+                          <Typography.Text type={t.status === 'failed' ? 'danger' : 'warning'}>
+                            {t.error}
+                          </Typography.Text>
+                        </div>
+                      ) : null}
+                    </div>
+                  ),
+                },
+                {
+                  title: '來源',
+                  width: 90,
+                  render: (_, t) => (t.source === 'ai' ? <Tag color="purple">AI</Tag> : <Tag>上傳</Tag>),
+                },
+                {
+                  title: '長度',
+                  width: 80,
+                  render: (_, t) => formatDuration(t.duration),
+                },
+                {
+                  title: '加入時間',
+                  width: 110,
+                  render: (_, t) => dayjs(t.created_at).format('MM/DD HH:mm'),
+                },
+                {
+                  title: '自動挑選',
+                  width: 90,
+                  render: (_, t) => (
+                    <Switch
+                      size="small"
+                      aria-label={`自動挑選 ${t.title}`}
+                      checked={t.is_active}
+                      disabled={t.status !== 'ready'}
+                      onChange={(is_active) => update.mutate({ id: t.id, body: { is_active } })}
+                    />
+                  ),
+                },
+                {
+                  title: '',
+                  width: 56,
+                  render: (_, t) => (
+                    <Popconfirm
+                      title="刪除這首音樂？"
+                      okText="刪除"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => remove.mutate(t.id)}
                     >
-                      {t.title}
-                    </Typography.Text>
-                    {t.status === 'generating' ? <div className="small muted">AI 產生中…</div> : null}
-                    {t.status === 'failed' || (t.error && t.status === 'generating') ? (
-                      <div className="small">
-                        <Typography.Text type={t.status === 'failed' ? 'danger' : 'warning'}>{t.error}</Typography.Text>
-                      </div>
-                    ) : null}
-                  </div>
-                ),
-              },
-              {
-                title: '來源',
-                width: 90,
-                render: (_, t) => (t.source === 'ai' ? <Tag color="purple">AI</Tag> : <Tag>上傳</Tag>),
-              },
-              { title: '長度', width: 80, render: (_, t) => formatDuration(t.duration) },
-              { title: '加入時間', width: 110, render: (_, t) => dayjs(t.created_at).format('MM/DD HH:mm') },
-              {
-                title: '自動挑選',
-                width: 90,
-                render: (_, t) => (
-                  <Switch
-                    size="small"
-                    checked={t.is_active}
-                    disabled={t.status !== 'ready'}
-                    onChange={(is_active) => update.mutate({ id: t.id, body: { is_active } })}
-                  />
-                ),
-              },
-              {
-                title: '',
-                width: 56,
-                render: (_, t) => (
-                  <Popconfirm title="刪除這首音樂？" okText="刪除" okButtonProps={{ danger: true }} onConfirm={() => remove.mutate(t.id)}>
-                    <Button type="text" danger icon={<DeleteOutlined />} aria-label="刪除" disabled={t.status === 'generating'} />
-                  </Popconfirm>
-                ),
-              },
-            ]}
-          />
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        aria-label="刪除"
+                        disabled={t.status === 'generating'}
+                      />
+                    </Popconfirm>
+                  ),
+                },
+              ]}
+            />
+          ) : (
+            <div className="record-list">
+              {tracks.map((t) => (
+                <div key={t.id} className="compact-record">
+                  <Typography.Text
+                    editable={
+                      t.status === 'ready'
+                        ? {
+                            onChange: (title) => title !== t.title && update.mutate({ id: t.id, body: { title } }),
+                          }
+                        : false
+                    }
+                  >
+                    {t.title}
+                  </Typography.Text>
+                  <Space>
+                    <Tag>{t.source === 'ai' ? 'AI' : '上傳'}</Tag>
+                    <span>{formatDuration(t.duration)}</span>
+                    <span className="small muted">
+                      {t.status === 'generating' ? 'AI 產生中…' : t.status === 'failed' ? '產生失敗' : '可使用'}
+                    </span>
+                  </Space>
+                  {t.error ? <Alert type="warning" title={t.error} /> : null}
+                  <Space wrap>
+                    {t.audio_url ? <AudioButton url={t.audio_url}>播放已有音樂</AudioButton> : null}
+                    <Switch
+                      aria-label={`自動挑選 ${t.title}`}
+                      checked={t.is_active}
+                      disabled={t.status !== 'ready'}
+                      onChange={(is_active) => update.mutate({ id: t.id, body: { is_active } })}
+                    />
+                    <span>自動挑選</span>
+                    <Popconfirm title="刪除這首音樂？" onConfirm={() => remove.mutate(t.id)}>
+                      <Button danger disabled={t.status === 'generating'}>
+                        刪除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                </div>
+              ))}
+            </div>
+          )
         ) : null}
       </Card>
     </>

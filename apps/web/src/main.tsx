@@ -28,9 +28,20 @@ createRoot(document.getElementById('root')!).render(
       theme={{
         token: {
           colorPrimary: '#2f6bff',
-          borderRadius: 10,
+          colorText: '#202b40',
+          colorTextSecondary: '#626e82',
+          colorBgLayout: '#f5f7fa',
+          colorBorderSecondary: '#e9edf3',
+          borderRadius: 8,
+          fontSize: 14,
+          controlHeight: 36,
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
+        },
+        components: {
+          Card: { borderRadiusLG: 12 },
+          Statistic: { contentFontSize: 28 },
+          Menu: { itemHeight: 40 },
         },
       }}
     >

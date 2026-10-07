@@ -1,11 +1,29 @@
 import { SoundOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Col, Empty, Form, Input, Modal, Row, Segmented, Select, Slider, Space, Tag, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Row,
+  Segmented,
+  Select,
+  Slider,
+  Space,
+  Tag,
+  Typography,
+} from 'antd'
 import { useMemo, useState } from 'react'
 import { api, formatUsd, VOICE_ENGINES, type Voice, type VoiceEngine } from '../api'
 import { ApiError } from '../api/http'
 import { playAudio } from '../audio'
 import VoicePlayButton from '../components/VoicePlayButton'
+import QueryFeedback from '../components/QueryFeedback'
 import PageHeader from '../components/PageHeader'
 
 const SAMPLE_TEXT =
@@ -14,12 +32,15 @@ const SAMPLE_TEXT =
 export default function VoicesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  const { data: voiceData, isPending } = useQuery({ queryKey: ['voices'], queryFn: api.voices })
+  const { data: voiceData, isPending, error, refetch } = useQuery({ queryKey: ['voices'], queryFn: api.voices })
   const voices = voiceData?.items
   const active = voiceData?.active_engine ?? null
   const [engine, setEngine] = useState<VoiceEngine | null>(null)
   const currentEngine: VoiceEngine = engine ?? active ?? 'gemini'
-  const { data: profileData } = useQuery({ queryKey: ['profiles'], queryFn: api.profiles })
+  const { data: profileData } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: api.profiles,
+  })
   const [scope, setScope] = useState<'recommended' | 'all'>('recommended')
   const [keyword, setKeyword] = useState('')
   const [trying, setTrying] = useState<Voice | null>(null)
@@ -51,6 +72,7 @@ export default function VoicesPage() {
         title="音色管理"
         subtitle="試聽音色並綁定到帳號檔案。ElevenLabs 試聽免費；Gemini 第一次試聽會產生一段樣本（約 US$0.001）；自訂文字試聽會扣 kie.ai 點數"
       />
+      <QueryFeedback error={error} retry={refetch} />
       {active ? (
         <Alert
           className="section"
@@ -76,13 +98,21 @@ export default function VoicesPage() {
           onChange={(v) => setScope(v as 'recommended' | 'all')}
           options={[
             { value: 'recommended', label: '推薦旁白' },
-            { value: 'all', label: `全部（${(voices ?? []).filter((v) => v.engine === currentEngine).length}）` },
+            {
+              value: 'all',
+              label: `全部（${(voices ?? []).filter((v) => v.engine === currentEngine).length}）`,
+            },
           ]}
         />
-        <Input.Search placeholder="搜尋名稱或風格，例如 warm" allowClear onSearch={setKeyword} className="asset-search" />
+        <Input.Search
+          placeholder="搜尋名稱或風格，例如 warm"
+          allowClear
+          onSearch={setKeyword}
+          className="asset-search"
+        />
       </div>
 
-      {shown.length === 0 && !isPending ? <Empty description="沒有符合的音色" /> : null}
+      {shown.length === 0 && !isPending && !error ? <Empty description="沒有符合的音色" /> : null}
       <Row gutter={[12, 12]}>
         {shown.map((voice) => {
           const bound = profiles.filter((p) => p.voice_id === voice.id)
@@ -142,7 +172,10 @@ export default function VoicesPage() {
 
 function TryVoiceModal({ voice, onClose }: { voice: Voice | null; onClose: () => void }) {
   const [form] = Form.useForm<{ text: string; speed: number }>()
-  const [result, setResult] = useState<{ url: string; cost: number | null } | null>(null)
+  const [result, setResult] = useState<{
+    url: string
+    cost: number | null
+  } | null>(null)
   const preview = useMutation({
     mutationFn: (values: { text: string; speed: number }) => api.voicePreview({ voice_id: voice!.id, ...values }),
     onSuccess: (data) => {
@@ -165,7 +198,12 @@ function TryVoiceModal({ voice, onClose }: { voice: Voice | null; onClose: () =>
       onOk={() => form.submit()}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" initialValues={{ text: SAMPLE_TEXT, speed: 1 }} onFinish={(v) => preview.mutate(v)}>
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={{ text: SAMPLE_TEXT, speed: 1 }}
+        onFinish={(v) => preview.mutate(v)}
+      >
         <Form.Item name="text" label="文字（任何語言都可以）" rules={[{ required: true, message: '請輸入文字' }]}>
           <Input.TextArea maxLength={1500} showCount autoSize={{ minRows: 3, maxRows: 8 }} />
         </Form.Item>

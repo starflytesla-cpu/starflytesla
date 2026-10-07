@@ -102,7 +102,7 @@ body {
 
 .phase-tag {
   margin-inline-end: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
   color: var(--muted);
 }
@@ -435,7 +435,7 @@ body {
   bottom: 0;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -725,4 +725,474 @@ body {
 
 .full-height {
   height: 100%;
+}
+
+/* ---------- 全站升級：資訊層級與響應式操作 ---------- */
+:root {
+  --page-bg: #f5f7fa;
+  --muted: #626e82;
+}
+body {
+  background: var(--page-bg);
+  color: #202b40;
+  font-size: 14px;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+.app-shell > .ant-layout {
+  min-width: 0;
+  background: var(--page-bg);
+}
+.app-sider {
+  border-color: #e9edf3;
+}
+.brand {
+  padding-bottom: 20px;
+}
+.side-menu .ant-menu-item-group-title {
+  font-size: 12px;
+  color: #626e82;
+  padding-top: 18px;
+  padding-bottom: 4px;
+}
+.side-menu .ant-menu-item {
+  margin-inline: 12px;
+  width: calc(100% - 24px);
+}
+.app-header {
+  height: 64px;
+  line-height: 64px;
+  background: #fff;
+  border-bottom: 1px solid #e9edf3;
+  margin-bottom: 24px;
+  padding-inline: 24px;
+}
+.header-location {
+  color: #626e82;
+  font-size: 13px;
+}
+.header-location span {
+  margin-inline: 12px;
+  color: #bac2cf;
+}
+.app-content {
+  padding: 0 24px 40px;
+}
+.page-header {
+  margin: 0 0 24px;
+  align-items: center;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.page-header p {
+  max-width: 780px;
+  margin-top: 6px;
+  line-height: 1.7;
+}
+.page-header-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ant-card {
+  border-color: #e9edf3;
+  box-shadow: 0 2px 6px rgba(20, 36, 62, 0.025);
+}
+.ant-card .ant-card-head {
+  min-height: 56px;
+}
+.ant-card .ant-card-head-title {
+  font-size: 16px;
+}
+.ant-table-cell {
+  font-variant-numeric: tabular-nums;
+}
+.ant-typography,
+.ant-alert-description,
+.ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+}
+.section {
+  margin-bottom: 24px;
+}
+.numeric,
+.ant-statistic-content {
+  font-variant-numeric: tabular-nums;
+}
+.ant-statistic-title {
+  color: #626e82;
+  font-size: 13px;
+}
+.metric-card {
+  height: 100%;
+}
+.metric-card .ant-card-body {
+  padding: 20px;
+}
+.metric-note {
+  color: #626e82;
+  margin-top: 10px;
+  font-size: 12px;
+  min-height: 20px;
+}
+.metric-link {
+  padding: 0;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.metric-link:hover .ant-statistic-title {
+  color: #2f6bff;
+}
+.scope-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.scope-bar > :last-child {
+  margin-left: auto;
+}
+.cost-chart {
+  height: 235px;
+  width: 100%;
+}
+.chart-legend {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.chart-legend > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chart-legend strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.chart-legend > div > :last-child {
+  width: 52px;
+  text-align: right;
+  color: #626e82;
+}
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.scroll-tabs,
+.works-tabs {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.scroll-tabs .ant-segmented {
+  white-space: nowrap;
+}
+.record-list {
+  display: grid;
+  gap: 12px;
+}
+.compact-record {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e9edf3;
+  border-radius: 10px;
+  background: #fff;
+  min-width: 0;
+}
+.record-button {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+.record-button:hover {
+  border-color: #2f6bff;
+}
+.record-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.break-word {
+  overflow-wrap: anywhere;
+}
+.detail-error {
+  margin-top: 24px;
+}
+.error-body {
+  white-space: pre-wrap;
+  font:
+    12px/1.7 ui-monospace,
+    monospace;
+  margin: 0 !important;
+}
+.workflow-card h2 {
+  font-size: 16px;
+  margin: 12px 0 4px;
+}
+.workflow-card p {
+  min-height: 44px;
+  line-height: 1.7;
+}
+.workflow-index {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2f6bff;
+  padding: 5px 8px;
+  background: #edf3ff;
+  border-radius: 6px;
+}
+.asset-card,
+.template-card,
+.voice-card {
+  height: 100%;
+}
+.asset-card .ant-card-body {
+  padding: 12px;
+}
+.asset-name {
+  font-size: 14px;
+}
+.asset-cover {
+  border-radius: 10px 10px 0 0;
+}
+.asset-filters {
+  background: #fff;
+  padding: 16px;
+  border: 1px solid #e9edf3;
+  border-radius: 12px;
+}
+.shot-index {
+  background: #edf3ff;
+  color: #2f6bff;
+  border-radius: 7px;
+}
+.shot-row,
+.clip-row {
+  background: #f7f9fc;
+  border: 1px solid #e9edf3;
+  padding: 16px;
+}
+.shot-row label {
+  font-size: 12px;
+  color: #626e82;
+}
+.ant-message {
+  left: auto !important;
+  right: 24px;
+  width: auto !important;
+  max-width: min(440px, calc(100vw - 32px));
+}
+.ant-message-notice-wrapper {
+  text-align: right;
+}
+.ant-message-notice-content {
+  text-align: left;
+}
+:focus-visible {
+  outline: 3px solid #2f6bff;
+  outline-offset: 3px;
+}
+.ant-btn:focus-visible {
+  outline-offset: 2px;
+}
+.login-card {
+  max-width: 420px;
+  box-shadow: 0 12px 40px rgba(25, 44, 78, 0.08);
+}
+.login-card .ant-card-body {
+  padding: 32px;
+}
+.video-layout {
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+}
+.review-timeline {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0;
+  height: 56px;
+}
+.review-timeline button {
+  min-width: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #202b40;
+  background: #edf3ff;
+  cursor: pointer;
+  padding: 6px;
+  font: inherit;
+}
+.review-timeline button:hover,
+.review-timeline button[aria-current='true'] {
+  background: #2f6bff;
+  color: #fff;
+}
+.review-timeline span {
+  display: block;
+  font-size: 12px;
+}
+.form-section-title {
+  font-size: 16px;
+  margin: 24px 0 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e9edf3;
+}
+.editor-summary {
+  position: sticky;
+  top: 24px;
+}
+.editor-summary .ant-statistic {
+  margin-bottom: 16px;
+}
+.editor-stage {
+  margin-bottom: 12px;
+}
+.publish-summary {
+  background: #f5f8ff;
+  padding: 16px;
+  border-radius: 10px;
+  margin: 16px 0;
+}
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 16px;
+}
+.comments-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.comment-detail {
+  position: sticky;
+  top: 16px;
+}
+.comment-original {
+  padding: 16px;
+  background: #f7f9fc;
+  border-left: 3px solid #2f6bff;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
+.compact-record.is-selected {
+  border-color: #2f6bff;
+  background: #f7faff;
+}
+@media (max-width: 991px) {
+  .app-header {
+    padding-inline: 16px;
+    margin-bottom: 20px;
+  }
+  .app-content {
+    padding: 0 16px 32px;
+  }
+}
+@media (max-width: 767px) {
+  .page-header {
+    gap: 16px;
+  }
+  .page-header h1 {
+    font-size: 22px;
+  }
+  .page-header-extra {
+    width: 100%;
+  }
+  .page-header-extra > .ant-btn {
+    flex: 1;
+  }
+  .ant-card .ant-card-body {
+    padding: 16px;
+  }
+  .metric-card .ant-card-body {
+    padding: 16px 12px;
+  }
+  .ant-statistic-content {
+    font-size: 24px;
+  }
+  .scope-bar > :last-child {
+    margin-left: 0;
+  }
+  .ant-btn:not(.ant-btn-icon-only),
+  .ant-select-single .ant-select-selector,
+  .ant-input:not(textarea),
+  .ant-picker {
+    min-height: 44px;
+  }
+  .ant-btn-icon-only {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .ant-segmented-item-label {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .ant-tabs-tab {
+    padding-block: 14px;
+  }
+  .ant-checkbox-wrapper,
+  .ant-switch {
+    margin-block: 6px;
+  }
+  .ant-drawer-content-wrapper {
+    max-width: 100vw;
+  }
+  .ant-drawer-body {
+    padding: 16px !important;
+  }
+  .ant-drawer-header,
+  .ant-drawer-footer {
+    padding: 16px !important;
+  }
+  .ant-message {
+    right: 16px;
+  }
+  .video-layout,
+  .comments-layout {
+    grid-template-columns: 1fr;
+  }
+  .comment-detail,
+  .editor-summary {
+    position: static;
+  }
+  .shot-row {
+    gap: 8px;
+    padding: 12px;
+  }
+  .video-player {
+    max-width: 300px;
+  }
+  .review-timeline {
+    height: 64px;
+  }
+  .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -23,6 +23,7 @@ import dayjs from 'dayjs'
 import { useState } from 'react'
 import { api, SCENE_LABELS, SCRIPT_STATUS, type Script, type ScriptStatus, type Template } from '../../api'
 import { ApiError } from '../../api/http'
+import QueryFeedback from '../../components/QueryFeedback'
 import { playAudio } from '../../audio'
 
 const PAGE_SIZE = 12
@@ -44,9 +45,12 @@ export default function ScriptsPanel({
   const [profileId, setProfileId] = useState<string | undefined>()
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<string | null>(null)
-  const { data: profileData } = useQuery({ queryKey: ['profiles'], queryFn: api.profiles })
+  const { data: profileData } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: api.profiles,
+  })
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ['scripts', { templateId, status, profileId, page }],
     queryFn: () =>
       api.scripts({
@@ -64,6 +68,7 @@ export default function ScriptsPanel({
 
   return (
     <>
+      <QueryFeedback error={error} retry={refetch} stale={!!data} />
       <div className="asset-filters section">
         <Select
           placeholder="全部模板"
@@ -85,7 +90,10 @@ export default function ScriptsPanel({
             setProfileId(v)
             setPage(1)
           }}
-          options={(profileData?.items ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          options={(profileData?.items ?? []).map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
         />
         <Select
           placeholder="全部狀態"
@@ -96,7 +104,10 @@ export default function ScriptsPanel({
             setStatus(v)
             setPage(1)
           }}
-          options={Object.entries(SCRIPT_STATUS).map(([value, s]) => ({ value, label: s.label }))}
+          options={Object.entries(SCRIPT_STATUS).map(([value, s]) => ({
+            value,
+            label: s.label,
+          }))}
         />
       </div>
 
@@ -108,7 +119,21 @@ export default function ScriptsPanel({
       <Row gutter={[16, 16]}>
         {scripts.map((script) => (
           <Col key={script.id} xs={24} md={12} xl={8}>
-            <Card hoverable size="small" onClick={() => setSelected(script.id)} className="script-card">
+            <Card
+              hoverable
+              size="small"
+              onClick={() => setSelected(script.id)}
+              role="button"
+              tabIndex={0}
+              aria-label={`審核文案 ${script.title || script.variant}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setSelected(script.id)
+                }
+              }}
+              className="script-card"
+            >
               <div className="script-card-head">
                 <Tag color={SCRIPT_STATUS[script.status].color}>{SCRIPT_STATUS[script.status].label}</Tag>
                 <Typography.Text strong ellipsis className="script-title">
@@ -119,8 +144,8 @@ export default function ScriptsPanel({
                 {script.status === 'generating' ? 'AI 正在撰寫…' : script.hook || script.error || '—'}
               </Typography.Paragraph>
               <Typography.Text type="secondary" className="small">
-                {script.template_name} · {script.profile_name} · {script.language} · 約 {Math.round(script.total_seconds)} 秒 ·{' '}
-                {dayjs(script.created_at).format('MM/DD HH:mm')}
+                {script.template_name} · {script.profile_name} · {script.language} · 約{' '}
+                {Math.round(script.total_seconds)} 秒 · {dayjs(script.created_at).format('MM/DD HH:mm')}
               </Typography.Text>
               {script.error && script.status !== 'generating' ? (
                 <div>
@@ -180,7 +205,7 @@ function ScriptDrawer({ script, onClose }: { script: Script | null; onClose: () 
     mutationFn: (extra: { status?: 'draft' | 'approved' }) =>
       api.updateScript(script!.id, { ...form.getFieldsValue(), ...extra }),
     onSuccess: (_, extra) => {
-      message.success(extra.status === 'approved' ? '已核准，Phase 3 混剪會使用這份文案' : '已儲存')
+      message.success(extra.status === 'approved' ? '已核准，剪輯會使用這份文案' : '已儲存')
       refresh()
     },
     onError: (e) => message.error(errorText(e)),
@@ -221,8 +246,29 @@ function ScriptDrawer({ script, onClose }: { script: Script | null; onClose: () 
       size={screens.md ? 760 : '100%'}
       title={script ? `${script.template_name} · 版本 ${script.variant}` : ''}
       destroyOnHidden
-      extra={
+      footer={
         script && !busy ? (
+          <Space wrap>
+            <Button loading={save.isPending} onClick={() => save.mutate({})}>
+              儲存內容
+            </Button>
+            <Button
+              type="primary"
+              disabled={script.status === 'failed'}
+              loading={save.isPending}
+              onClick={() =>
+                save.mutate({
+                  status: script.status === 'approved' ? 'draft' : 'approved',
+                })
+              }
+            >
+              {script.status === 'approved' ? '取消核准' : '核准文案'}
+            </Button>
+          </Space>
+        ) : null
+      }
+      extra={
+        screens.md && script && !busy ? (
           <Space wrap>
             <Button onClick={() => save.mutate({})} loading={save.isPending && !save.variables?.status}>
               儲存
@@ -246,28 +292,61 @@ function ScriptDrawer({ script, onClose }: { script: Script | null; onClose: () 
     >
       {script ? (
         busy ? (
-          <Alert type="info" showIcon title="AI 正在撰寫這份文案，完成後會自動顯示" description={script.error || undefined} />
+          <Alert
+            type="info"
+            showIcon
+            title="AI 正在撰寫這份文案，完成後會自動顯示"
+            description={script.error || undefined}
+          />
         ) : (
           <>
             {script.error ? (
-              <Alert className="section" type={script.status === 'failed' ? 'error' : 'warning'} showIcon title={script.error} />
+              <Alert
+                className="section"
+                type={script.status === 'failed' ? 'error' : 'warning'}
+                showIcon
+                title={script.error}
+              />
             ) : null}
             <Space wrap className="section">
-              <Button icon={<SoundOutlined />} loading={listen.isPending} onClick={() => listen.mutate()} disabled={script.status === 'failed'}>
-                {listen.isPending ? '配音產生中…' : '試聽整段配音'}
+              <Button
+                icon={<SoundOutlined />}
+                loading={listen.isPending}
+                onClick={() => {
+                  if (audio) playAudio(audio)
+                  else listen.mutate()
+                }}
+                disabled={script.status === 'failed'}
+              >
+                {listen.isPending ? '配音產生中…' : audio ? '播放已產生配音' : '產生 / 試聽配音（計費）'}
               </Button>
-              <Popconfirm title="重新產生這個版本？" description="目前的內容會被覆蓋。" onConfirm={() => regenerate.mutate()}>
+              <Popconfirm
+                title="重新產生這個版本？"
+                description="目前的內容會被覆蓋。"
+                onConfirm={() => regenerate.mutate()}
+              >
                 <Button icon={<ReloadOutlined />} loading={regenerate.isPending}>
                   重新產生
                 </Button>
               </Popconfirm>
-              <Popconfirm title="刪除這份文案？" okText="刪除" okButtonProps={{ danger: true }} onConfirm={() => remove.mutate()}>
+              <Popconfirm
+                title="刪除這份文案？"
+                okText="刪除"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => remove.mutate()}
+              >
                 <Button danger icon={<DeleteOutlined />}>
                   刪除
                 </Button>
               </Popconfirm>
             </Space>
             {audio ? <audio src={audio} controls className="full-width section" /> : null}
+            <Space wrap className="section">
+              <Tag>{script.profile_name}</Tag>
+              <Tag>{script.language}</Tag>
+              <Tag>{script.shots.length} 個鏡頭</Tag>
+              <Tag>約 {Math.round(script.total_seconds)} 秒</Tag>
+            </Space>
             <Form
               key={script.updated_at}
               form={form}
@@ -275,7 +354,10 @@ function ScriptDrawer({ script, onClose }: { script: Script | null; onClose: () 
               initialValues={{
                 title: script.title,
                 hook: script.hook,
-                shots: script.shots.map((s) => ({ voiceover: s.voiceover, caption: s.caption })),
+                shots: script.shots.map((s) => ({
+                  voiceover: s.voiceover,
+                  caption: s.caption,
+                })),
                 post_caption: script.post_caption,
                 hashtags: script.hashtags,
               }}
