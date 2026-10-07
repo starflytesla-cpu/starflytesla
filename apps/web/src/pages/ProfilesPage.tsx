@@ -23,6 +23,7 @@ import { useState } from 'react'
 import { api, VOICE_ENGINES, type Profile, type ProfileInput, type VoiceEngine } from '../api'
 import { ApiError } from '../api/http'
 import VoicePlayButton from '../components/VoicePlayButton'
+import QueryFeedback from '../components/QueryFeedback'
 import PageHeader from '../components/PageHeader'
 
 const TONE_SUGGESTIONS = ['專業可靠', '親切熱情', '幽默輕鬆', '自信直接', '溫暖有人情味'].map((value) => ({ value }))
@@ -34,7 +35,10 @@ function errorText(error: unknown) {
 export default function ProfilesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  const { data, isPending } = useQuery({ queryKey: ['profiles'], queryFn: api.profiles })
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: api.profiles,
+  })
   const [editing, setEditing] = useState<Profile | 'new' | null>(null)
   const languages = data?.languages ?? {}
 
@@ -58,6 +62,7 @@ export default function ProfilesPage() {
           </Button>
         }
       />
+      <QueryFeedback error={error} retry={refetch} />
       {data && data.items.length === 0 ? (
         <Card>
           <Empty description="還沒有帳號檔案。先建立一份，寫文案時才知道品牌、賣點和語言。">
@@ -71,6 +76,7 @@ export default function ProfilesPage() {
         {(data?.items ?? []).map((profile) => (
           <Col key={profile.id} xs={24} md={12} xl={8}>
             <Card
+              className="full-height"
               title={profile.name}
               extra={
                 <Space>
@@ -103,7 +109,7 @@ export default function ProfilesPage() {
                 </Typography.Paragraph>
               ) : null}
               <Typography.Text type="secondary" className="small">
-                已產生 {profile.script_count ?? 0} 份文案
+                已產生 {profile.script_count ?? '—'} 份文案
               </Typography.Text>
             </Card>
           </Col>
@@ -132,7 +138,11 @@ function ProfileDrawer({
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [form] = Form.useForm<ProfileInput>()
-  const { data: voiceData } = useQuery({ queryKey: ['voices'], queryFn: api.voices, enabled: !!target })
+  const { data: voiceData } = useQuery({
+    queryKey: ['voices'],
+    queryFn: api.voices,
+    enabled: !!target,
+  })
   const voices = voiceData?.items
   const active = voiceData?.active_engine ?? 'gemini'
   const engines = (Object.keys(VOICE_ENGINES) as VoiceEngine[]).sort((a) => (a === active ? -1 : 1))
@@ -153,7 +163,13 @@ function ProfileDrawer({
   const initial: ProfileInput =
     target && target !== 'new'
       ? target
-      : { target_language: 'en', voice_speed: 1, selling_points: [], hashtags: [], banned_words: [] }
+      : {
+          target_language: 'en',
+          voice_speed: 1,
+          selling_points: [],
+          hashtags: [],
+          banned_words: [],
+        }
 
   return (
     <Drawer
@@ -169,6 +185,7 @@ function ProfileDrawer({
       }
     >
       <Form form={form} layout="vertical" initialValues={initial} onFinish={(values) => save.mutate(values)}>
+        <h3 className="form-section-title">品牌與影片語言</h3>
         <Form.Item name="name" label="名稱（品牌 / 門店）" rules={[{ required: true, message: '請填寫名稱' }]}>
           <Input maxLength={80} placeholder="例如 Acme Precision Parts" />
         </Form.Item>
@@ -183,16 +200,29 @@ function ProfileDrawer({
               <Select
                 showSearch
                 optionFilterProp="label"
-                options={Object.entries(languages).map(([value, label]) => ({ value, label }))}
+                options={Object.entries(languages).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
               />
             </Form.Item>
           </Col>
         </Row>
+        <h3 className="form-section-title">受眾、賣點與產品事實</h3>
         <Form.Item name="audience" label="目標受眾">
-          <Input.TextArea maxLength={500} autoSize={{ minRows: 2, maxRows: 4 }} placeholder="例如 美國、歐洲的五金品牌採購，重視品質與交期" />
+          <Input.TextArea
+            maxLength={500}
+            autoSize={{ minRows: 2, maxRows: 4 }}
+            placeholder="例如 美國、歐洲的五金品牌採購，重視品質與交期"
+          />
         </Form.Item>
         <Form.Item name="selling_points" label="核心賣點" extra="輸入後按 Enter，可加多個；AI 只會使用這裡寫的事實">
-          <Select mode="tags" open={false} tokenSeparators={[',', '，']} placeholder="例如 15 年經驗、ISO 9001、7 天打樣" />
+          <Select
+            mode="tags"
+            open={false}
+            tokenSeparators={[',', '，']}
+            placeholder="例如 15 年經驗、ISO 9001、7 天打樣"
+          />
         </Form.Item>
         <Form.Item name="product_details" label="產品詳情">
           <Input.TextArea
@@ -216,10 +246,19 @@ function ProfileDrawer({
         <Form.Item name="hashtags" label="常用 Hashtag">
           <Select mode="tags" open={false} tokenSeparators={[',', '，', ' ']} placeholder="例如 #cnc #madeintaiwan" />
         </Form.Item>
-        <Form.Item name="banned_words" label="禁用詞" extra="例如沒有取得的認證、競品名稱、誇大用語；AI 文案出現時會提醒">
+        <Form.Item
+          name="banned_words"
+          label="禁用詞"
+          extra="例如沒有取得的認證、競品名稱、誇大用語；AI 文案出現時會提醒"
+        >
           <Select mode="tags" open={false} tokenSeparators={[',', '，']} />
         </Form.Item>
-        <Form.Item label="配音音色" htmlFor="profile-voice" extra="請選「目前使用中」引擎的音色；可以到「音色管理」試聽">
+        <h3 className="form-section-title">配音設定</h3>
+        <Form.Item
+          label="配音音色"
+          htmlFor="profile-voice"
+          extra="請選「目前使用中」引擎的音色；可以到「音色管理」試聽"
+        >
           <Space.Compact className="full-width">
             <Form.Item name="voice_id" noStyle>
               <Select
@@ -233,7 +272,10 @@ function ProfileDrawer({
                   options: (voices ?? [])
                     .filter((v) => v.engine === engine)
                     .sort((a, b) => Number(b.recommended) - Number(a.recommended))
-                    .map((v) => ({ value: v.id, label: `${v.name} · ${v.description}${v.recommended ? ' ★' : ''}` })),
+                    .map((v) => ({
+                      value: v.id,
+                      label: `${v.name} · ${v.description}${v.recommended ? ' ★' : ''}`,
+                    })),
                 }))}
               />
             </Form.Item>

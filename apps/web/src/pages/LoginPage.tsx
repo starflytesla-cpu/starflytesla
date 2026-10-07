@@ -43,10 +43,21 @@ export default function LoginPage() {
         {error ? <Alert type="error" title={error} showIcon className="login-alert" /> : null}
         <Form layout="vertical" onFinish={submit} requiredMark={false} size="large">
           <Form.Item name="email" rules={[{ required: true, type: 'email', message: '請輸入正確的 Email' }]}>
-            <Input prefix={<MailOutlined />} placeholder="Email" autoComplete="username" inputMode="email" />
+            <Input
+              aria-label="Email"
+              prefix={<MailOutlined />}
+              placeholder="Email"
+              autoComplete="username"
+              inputMode="email"
+            />
           </Form.Item>
           <Form.Item name="password" rules={[{ required: true, message: '請輸入密碼' }]}>
-            <Input.Password prefix={<LockOutlined />} placeholder="密碼" autoComplete="current-password" />
+            <Input.Password
+              aria-label="密碼"
+              prefix={<LockOutlined />}
+              placeholder="密碼"
+              autoComplete="current-password"
+            />
           </Form.Item>
           <Button type="primary" htmlType="submit" block loading={loading}>
             登入

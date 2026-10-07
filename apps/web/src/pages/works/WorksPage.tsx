@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { api, formatDuration, VIDEO_STATUS, type Video, type VideoStatus } from '../../api'
+import QueryFeedback from '../../components/QueryFeedback'
 import PageHeader from '../../components/PageHeader'
 import VideoDrawer from './VideoDrawer'
 
@@ -22,7 +23,11 @@ export default function WorksPage() {
   const [selected, setSelected] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
-  const { data: stats } = useQuery({
+  const {
+    data: stats,
+    error: statsError,
+    refetch: refetchStats,
+  } = useQuery({
     queryKey: ['video-stats'],
     queryFn: api.videoStats,
     refetchInterval: (q) => (q.state.data && q.state.data.queued + q.state.data.rendering > 0 ? 3000 : false),
@@ -34,15 +39,23 @@ export default function WorksPage() {
   }, [busy, queryClient])
   // 「渲染中」分頁同時顯示排隊與渲染中的成片
   const status = tab === 'all' || tab === 'rendering' ? undefined : tab
-  const { data, isPending } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ['videos', tab, page],
     queryFn: async () => {
-      if (tab !== 'rendering') return api.videos({ status, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE })
+      if (tab !== 'rendering')
+        return api.videos({
+          status,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+        })
       const [rendering, queued] = await Promise.all([
         api.videos({ status: 'rendering', limit: 100, offset: 0 }),
         api.videos({ status: 'queued', limit: 100, offset: 0 }),
       ])
-      return { items: [...rendering.items, ...queued.items], total: rendering.total + queued.total }
+      return {
+        items: [...rendering.items, ...queued.items],
+        total: rendering.total + queued.total,
+      }
     },
     placeholderData: keepPreviousData,
     refetchInterval: (q) => (busy > 0 || q.state.data?.items.some((v) => isRendering(v.status)) ? 3000 : false),
@@ -54,7 +67,8 @@ export default function WorksPage() {
     if (key === 'rendering') return stats.rendering + stats.queued
     return stats[key]
   }
-  const label = (key: VideoStatus | 'all') => (key === 'all' ? '全部' : key === 'rendering' ? '產生中' : VIDEO_STATUS[key].label)
+  const label = (key: VideoStatus | 'all') =>
+    key === 'all' ? '全部' : key === 'rendering' ? '產生中' : VIDEO_STATUS[key].label
 
   return (
     <>
@@ -67,6 +81,11 @@ export default function WorksPage() {
           </Button>
         }
       />
+      <QueryFeedback
+        error={error || statsError}
+        retry={() => Promise.all([refetch(), refetchStats()])}
+        stale={!!data}
+      />
       <div className="section works-tabs">
         <Segmented
           value={tab}
@@ -74,7 +93,10 @@ export default function WorksPage() {
             setTab(v as VideoStatus | 'all')
             setPage(1)
           }}
-          options={TABS.map((key) => ({ value: key, label: `${label(key)} ${count(key)}` }))}
+          options={TABS.map((key) => ({
+            value: key,
+            label: `${label(key)} ${count(key)}`,
+          }))}
         />
       </div>
 
@@ -122,6 +144,15 @@ function VideoCard({ video, onOpen }: { video: Video; onOpen: () => void }) {
       size="small"
       className="asset-card"
       onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      aria-label={`審核成片 ${video.title}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
       cover={
         <div className="asset-cover video-cover">
           {video.poster_url && !isRendering(video.status) ? (
@@ -142,6 +173,7 @@ function VideoCard({ video, onOpen }: { video: Video; onOpen: () => void }) {
       <Typography.Text ellipsis className="asset-name" title={video.title}>
         {video.title}
       </Typography.Text>
+      {isRendering(video.status) ? <div className="small muted">{video.stage || '排隊中'}</div> : null}
       <Typography.Text type="secondary" className="small">
         {video.profile_name} · {dayjs(video.created_at).format('MM/DD HH:mm')}
       </Typography.Text>

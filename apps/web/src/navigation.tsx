@@ -108,8 +108,38 @@ export const WORK_ITEMS: NavItem[] = [
 ]
 
 export const SETTINGS_ITEMS: NavItem[] = [
-  { path: '/settings/channels', label: '模型渠道', icon: <ApiOutlined />, adminOnly: true },
-  { path: '/settings/publish-channels', label: '發佈渠道', icon: <SendOutlined />, adminOnly: true },
-  { path: '/settings/usage', label: '用量與成本', icon: <WalletOutlined />, adminOnly: true },
-  { path: '/settings/users', label: '帳號管理', icon: <TeamOutlined />, adminOnly: true },
+  {
+    path: '/settings/channels',
+    label: '模型渠道',
+    icon: <ApiOutlined />,
+    adminOnly: true,
+  },
+  {
+    path: '/settings/publish-channels',
+    label: '發佈渠道',
+    icon: <SendOutlined />,
+    adminOnly: true,
+  },
+  {
+    path: '/settings/usage',
+    label: '用量與成本',
+    icon: <WalletOutlined />,
+    adminOnly: true,
+  },
+  {
+    path: '/settings/users',
+    label: '帳號管理',
+    icon: <TeamOutlined />,
+    adminOnly: true,
+  },
+]
+
+export const NAV_GROUPS = [
+  { label: '工作台', paths: ['/', '/tasks'] },
+  { label: '內容製作', paths: ['/assets', '/templates', '/editor', '/works'] },
+  { label: '發佈與互動', paths: ['/publish-tasks', '/comments'] },
+  {
+    label: '品牌與資源',
+    paths: ['/profiles', '/publish-accounts', '/voices', '/music'],
+  },
 ]

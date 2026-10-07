@@ -1,9 +1,17 @@
-import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Col, Popconfirm, Row, Segmented, Space, Tabs, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { api, STRATEGY_LABELS, type Strategy, type Template } from '../../api'
 import { ApiError } from '../../api/http'
+import QueryFeedback from '../../components/QueryFeedback'
 import PageHeader from '../../components/PageHeader'
 import GenerateModal from './GenerateModal'
 import ScriptsPanel from './ScriptsPanel'
@@ -16,7 +24,10 @@ function errorText(error: unknown) {
 export default function TemplatesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  const { data, isPending } = useQuery({ queryKey: ['templates'], queryFn: api.templates })
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: ['templates'],
+    queryFn: api.templates,
+  })
   const [tab, setTab] = useState<'templates' | 'scripts'>('templates')
   const [strategy, setStrategy] = useState<Strategy | 'all'>('all')
   const [viewing, setViewing] = useState<Template | 'new' | null>(null)
@@ -50,13 +61,14 @@ export default function TemplatesPage() {
         title="模板文案"
         subtitle="選一個模板 + 帳號檔案，AI 依每個鏡頭寫好配音稿與畫面字幕，一次產生多個不重複的版本"
       />
+      <QueryFeedback error={error} retry={refetch} />
       <Tabs
         activeKey={tab}
         onChange={(key) => setTab(key as 'templates' | 'scripts')}
         items={[
           {
             key: 'templates',
-            label: '模板',
+            label: '1. 選擇模板',
             children: (
               <>
                 <div className="asset-filters section">
@@ -104,7 +116,12 @@ export default function TemplatesPage() {
                             {template.builtin ? '查看' : '編輯'}
                           </Button>,
                           template.builtin ? (
-                            <Button key="copy" type="link" icon={<CopyOutlined />} onClick={() => copy.mutate(template.id)}>
+                            <Button
+                              key="copy"
+                              type="link"
+                              icon={<CopyOutlined />}
+                              onClick={() => copy.mutate(template.id)}
+                            >
                               複製
                             </Button>
                           ) : (
@@ -159,7 +176,7 @@ export default function TemplatesPage() {
           },
           {
             key: 'scripts',
-            label: '文案',
+            label: '2. 審核文案',
             children: (
               <ScriptsPanel
                 templates={data?.items ?? []}

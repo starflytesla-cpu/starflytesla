@@ -27,6 +27,7 @@ import {
 import dayjs from 'dayjs'
 import { useRef, useState } from 'react'
 import { api, formatDuration, SCENE_LABELS, VIDEO_STATUS, type VideoDetail, type VideoShot } from '../../api'
+import QueryFeedback from '../../components/QueryFeedback'
 import { ApiError } from '../../api/http'
 
 function errorText(error: unknown) {
@@ -41,10 +42,16 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
   const queryClient = useQueryClient()
   const player = useRef<HTMLVideoElement>(null)
   const [rejecting, setRejecting] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
   const [note, setNote] = useState('')
   const [swapShot, setSwapShot] = useState<VideoShot | null>(null)
 
-  const { data: video, isPending } = useQuery({
+  const {
+    data: video,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['video', videoId],
     queryFn: () => api.video(videoId!),
     enabled: !!videoId,
@@ -58,9 +65,10 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
     message.success(text)
   }
   const review = useMutation({
-    mutationFn: ({ action, note }: { action: 'approve' | 'reject'; note?: string }) => api.reviewVideo(videoId!, action, note),
+    mutationFn: ({ action, note }: { action: 'approve' | 'reject'; note?: string }) =>
+      api.reviewVideo(videoId!, action, note),
     onSuccess: (data, vars) => {
-      saved(data, vars.action === 'approve' ? '已通過，Phase 4 可以排程發佈' : '已退回')
+      saved(data, vars.action === 'approve' ? '已通過，可以排程發佈' : '已退回')
       setRejecting(false)
       setNote('')
     },
@@ -92,13 +100,35 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
     <Drawer
       open={!!videoId}
       onClose={onClose}
-      size={screens.md ? 860 : '100%'}
+      size={screens.lg ? 1120 : '100%'}
       title={video?.title ?? '成片'}
       destroyOnHidden
+      footer={
+        !screens.md && reviewable ? (
+          <Space className="full-width">
+            <Button danger disabled={video.status === 'rejected'} onClick={() => setRejecting(true)}>
+              退回
+            </Button>
+            <Button
+              type="primary"
+              disabled={video.status === 'approved'}
+              loading={review.isPending}
+              onClick={() => review.mutate({ action: 'approve' })}
+            >
+              通過審核
+            </Button>
+          </Space>
+        ) : null
+      }
       extra={
-        reviewable ? (
+        screens.md && reviewable ? (
           <Space>
-            <Button danger icon={<CloseOutlined />} onClick={() => setRejecting(true)} disabled={video.status === 'rejected'}>
+            <Button
+              danger
+              icon={<CloseOutlined />}
+              onClick={() => setRejecting(true)}
+              disabled={video.status === 'rejected'}
+            >
               退回
             </Button>
             <Button
@@ -114,14 +144,24 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
         ) : null
       }
     >
-      {isPending || !video ? (
+      <QueryFeedback error={error} retry={refetch} stale={!!video} />
+      {isPending ? (
         <Skeleton active />
-      ) : (
+      ) : video ? (
         <div className="video-layout">
           <div className="video-player-col">
             <div className="video-player">
               {video.video_url && !isBusy(video.status) ? (
-                <video ref={player} src={video.video_url} poster={video.poster_url ?? undefined} controls playsInline preload="metadata" />
+                <video
+                  ref={player}
+                  src={video.video_url}
+                  poster={video.poster_url ?? undefined}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                  onLoadedMetadata={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                />
               ) : (
                 <div className="video-player-empty">
                   {isBusy(video.status) ? <Spin /> : null}
@@ -145,14 +185,21 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
                   重新挑素材
                 </Button>
               </Popconfirm>
-              <Popconfirm title="刪除這支成片？" okText="刪除" okButtonProps={{ danger: true }} onConfirm={() => remove.mutate()}>
+              <Popconfirm
+                title="刪除這支成片？"
+                okText="刪除"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => remove.mutate()}
+              >
                 <Button danger icon={<DeleteOutlined />} disabled={video.status === 'rendering'} aria-label="刪除" />
               </Popconfirm>
             </Space>
           </div>
 
           <div className="video-info-col">
-            {video.status === 'failed' ? <Alert className="section" type="error" showIcon title={`渲染失敗：${video.error}`} /> : null}
+            {video.status === 'failed' ? (
+              <Alert className="section" type="error" showIcon title={`渲染失敗：${video.error}`} />
+            ) : null}
             {video.status === 'rejected' && video.review_note ? (
               <Alert className="section" type="warning" showIcon title={`退回原因：${video.review_note}`} />
             ) : null}
@@ -173,7 +220,23 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
               <Descriptions.Item label="建立">{dayjs(video.created_at).format('MM/DD HH:mm')}</Descriptions.Item>
             </Descriptions>
 
-            <Typography.Title level={5}>鏡頭（點縮圖跳到該段）</Typography.Title>
+            <Typography.Title level={5}>鏡頭審核</Typography.Title>
+            <p className="small muted">點時間軸或縮圖跳到該段；換素材後會重新渲染並再次審核。</p>
+            <div className="review-timeline" aria-label="成片鏡頭時間軸">
+              {video.shots.map((shot) => (
+                <button
+                  key={shot.index}
+                  type="button"
+                  style={{ flex: Math.max(shot.duration, 0.1) }}
+                  aria-label={`跳到鏡頭 ${shot.index + 1}，${shot.start.toFixed(1)} 秒`}
+                  aria-current={currentTime >= shot.start && currentTime < shot.start + shot.duration}
+                  onClick={() => seek(shot)}
+                >
+                  鏡頭 {shot.index + 1}
+                  <span>{shot.duration.toFixed(1)}s</span>
+                </button>
+              ))}
+            </div>
             {video.shots.length === 0 ? <Empty description="還沒有時間軸" /> : null}
             <div className="shot-list">
               {video.shots.map((shot) => (
@@ -182,7 +245,13 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
                   <div className="shot-body">
                     <div className="video-segments">
                       {shot.segments.map((seg, i) => (
-                        <button key={i} type="button" className="clip-thumb" onClick={() => seek(shot)} title={seg.description}>
+                        <button
+                          key={i}
+                          type="button"
+                          className="clip-thumb"
+                          onClick={() => seek(shot)}
+                          title={seg.description}
+                        >
                           {seg.thumb_url ? <img src={seg.thumb_url} alt="" loading="lazy" /> : null}
                           <span className="clip-time">{seg.duration.toFixed(1)}s</span>
                         </button>
@@ -208,7 +277,7 @@ export default function VideoDrawer({ videoId, onClose }: { videoId: string | nu
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <Modal
         open={rejecting}
@@ -254,7 +323,7 @@ function SwapModal({
   onDone: (data: VideoDetail) => void
 }) {
   const { message } = App.useApp()
-  const { data, isPending } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ['candidates', videoId, shot.index],
     queryFn: () => api.videoCandidates(videoId, shot.index),
   })
@@ -268,6 +337,7 @@ function SwapModal({
       <Typography.Paragraph type="secondary" className="small">
         {shot.brief}（需要 {shot.duration.toFixed(1)} 秒；同類型畫面排在前面，點一下就會換上並重新渲染）
       </Typography.Paragraph>
+      <QueryFeedback error={error} retry={refetch} />
       {isPending ? <Skeleton active /> : null}
       {data && data.length === 0 ? <Empty description="沒有其他可用的素材" /> : null}
       <Spin spinning={replace.isPending}>

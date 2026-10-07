@@ -35,9 +35,13 @@ import {
   type ClipInput,
 } from '../../api'
 import { ApiError } from '../../api/http'
+import QueryFeedback from '../../components/QueryFeedback'
 import { useMe } from '../../useMe'
 
-const SCENE_OPTIONS = Object.entries(SCENE_LABELS).map(([value, label]) => ({ value, label }))
+const SCENE_OPTIONS = Object.entries(SCENE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}))
 
 function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : '操作失敗'
@@ -52,7 +56,12 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
   const [editingClip, setEditingClip] = useState<Clip | null>(null)
   const isAdmin = me?.role === 'admin'
 
-  const { data: asset, isPending } = useQuery({
+  const {
+    data: asset,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['asset', assetId],
     queryFn: () => api.asset(assetId!),
     enabled: !!assetId,
@@ -137,13 +146,21 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
         ) : null
       }
     >
-      {isPending || !asset ? (
+      <QueryFeedback error={error} retry={refetch} stale={!!asset} />
+      {isPending ? (
         <Skeleton active />
-      ) : (
+      ) : asset ? (
         <>
           <div className="asset-player section">
             {asset.proxy_url ? (
-              <video ref={videoRef} src={asset.proxy_url} poster={asset.poster_url ?? undefined} controls playsInline preload="metadata" />
+              <video
+                ref={videoRef}
+                src={asset.proxy_url}
+                poster={asset.poster_url ?? undefined}
+                controls
+                playsInline
+                preload="metadata"
+              />
             ) : asset.poster_url ? (
               <img src={asset.poster_url} alt={asset.original_filename} />
             ) : (
@@ -152,7 +169,12 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
           </div>
 
           {isBusy(asset.status) ? (
-            <Alert className="section" type="info" showIcon title={`${ASSET_STATUS[asset.status].label}：${asset.stage || '排隊中'}`} />
+            <Alert
+              className="section"
+              type="info"
+              showIcon
+              title={`${ASSET_STATUS[asset.status].label}：${asset.stage || '排隊中'}`}
+            />
           ) : null}
           {asset.status === 'failed' ? (
             <Alert
@@ -176,6 +198,7 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
             <Alert className="section" type="warning" showIcon title={asset.stage} />
           ) : null}
 
+          <Typography.Title level={5}>基本資料與分類</Typography.Title>
           <Descriptions size="small" column={screens.md ? 2 : 1} className="section" bordered>
             <Descriptions.Item label="狀態">
               <Tag color={ASSET_STATUS[asset.status].color}>{ASSET_STATUS[asset.status].label}</Tag>
@@ -191,10 +214,12 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
                   onChange={(category: string) => update.mutate({ category })}
                 />
               ) : (
-                SCENE_LABELS[asset.category] ?? '未分類'
+                (SCENE_LABELS[asset.category] ?? '未分類')
               )}
             </Descriptions.Item>
-            {asset.duration ? <Descriptions.Item label="長度">{formatDuration(asset.duration)}</Descriptions.Item> : null}
+            {asset.duration ? (
+              <Descriptions.Item label="長度">{formatDuration(asset.duration)}</Descriptions.Item>
+            ) : null}
             {asset.width ? (
               <Descriptions.Item label="解析度">
                 {asset.width}×{asset.height}
@@ -230,7 +255,9 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
                     text: asset.note,
                   }}
                 >
-                  {asset.note || <Typography.Text type="secondary">例如產品型號、拍攝地點，AI 標註時會參考</Typography.Text>}
+                  {asset.note || (
+                    <Typography.Text type="secondary">例如產品型號、拍攝地點，AI 標註時會參考</Typography.Text>
+                  )}
                 </Typography.Paragraph>
               ) : (
                 asset.note || '—'
@@ -239,7 +266,12 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
           </Descriptions>
 
           {asset.original_url ? (
-            <Button className="section" icon={<DownloadOutlined />} href={asset.original_url} download={asset.original_filename}>
+            <Button
+              className="section"
+              icon={<DownloadOutlined />}
+              href={asset.original_url}
+              download={asset.original_filename}
+            >
               下載原始檔
             </Button>
           ) : null}
@@ -269,7 +301,7 @@ export default function AssetDrawer({ assetId, onClose }: { assetId: string | nu
             onSave={(body) => editingClip && updateClip.mutate({ id: editingClip.id, body })}
           />
         </>
-      )}
+      ) : null}
     </Drawer>
   )
 }
@@ -290,7 +322,13 @@ function ClipRow({
   const quality = clip.quality ? QUALITY_LABELS[clip.quality] : null
   return (
     <div className={`clip-row${clip.is_disabled ? ' is-disabled' : ''}`}>
-      <button type="button" className="clip-thumb" onClick={onSeek} disabled={!isVideo} title={isVideo ? '播放這個鏡頭' : undefined}>
+      <button
+        type="button"
+        className="clip-thumb"
+        onClick={onSeek}
+        disabled={!isVideo}
+        title={isVideo ? '播放這個鏡頭' : undefined}
+      >
         <img src={clip.thumb_url} alt={`鏡頭 ${clip.index + 1}`} loading="lazy" />
         {isVideo ? (
           <span className="clip-time">
@@ -304,7 +342,10 @@ function ClipRow({
           {quality ? <Tag color={quality.color}>{quality.label}</Tag> : null}
           {clip.is_dark ? <Tag color="default">過暗</Tag> : null}
           {clip.duplicate_of ? (
-            <Tag color="orange" title={`與「${clip.duplicate_of.filename}」第 ${clip.duplicate_of.index + 1} 個鏡頭幾乎相同`}>
+            <Tag
+              color="orange"
+              title={`與「${clip.duplicate_of.filename}」第 ${clip.duplicate_of.index + 1} 個鏡頭幾乎相同`}
+            >
               疑似重複
             </Tag>
           ) : null}
@@ -318,7 +359,9 @@ function ClipRow({
           </Typography.Text>
         ) : null}
       </div>
-      {isAdmin ? <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} aria-label="編輯鏡頭" /> : null}
+      {isAdmin ? (
+        <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} aria-label="編輯鏡頭" />
+      ) : null}
     </div>
   )
 }
@@ -358,7 +401,13 @@ function ClipEditModal({
             quality: clip.quality,
             is_disabled: clip.is_disabled,
           }}
-          onFinish={(values) => onSave({ ...values, scene: values.scene ?? '', description: values.description ?? '' })}
+          onFinish={(values) =>
+            onSave({
+              ...values,
+              scene: values.scene ?? '',
+              description: values.description ?? '',
+            })
+          }
         >
           <Form.Item name="scene" label="場景">
             <Select options={SCENE_OPTIONS} placeholder="選擇場景" allowClear />

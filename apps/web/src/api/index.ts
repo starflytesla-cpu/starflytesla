@@ -716,9 +716,4 @@ export function formatBytes(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-export function formatUsd(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '未設定價格'
-  if (value === 0) return '$0'
-  if (value < 0.01) return `$${value.toFixed(6).replace(/0+$/, '')}`
-  return `$${value.toFixed(2)}`
-}
+export { formatUsd } from './usageMetrics'
