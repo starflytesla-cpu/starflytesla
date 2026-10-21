@@ -92,9 +92,14 @@ services:
       # 素材檔案由 Caddy 直接提供（先經 /api/media/auth 檢查權限），唯讀
       - media:/media:ro
     # 保留原本的 default 網路（才能連到 api）。另外只讓 web 加入同機 muse-hub 的外部網路。
+    # musehub_net 會丟掉這個子網對外的新連線。容器同時接兩個網路時，Docker 可能把
+    # musehub_net 設成預設閘道，web 就上不了網（含憑證續期）。gw_priority 較高者
+    # 才是預設閘道，所以讓 starfly 的 default 網路優先。
     networks:
-      - default
-      - musehub_net
+      default:
+        gw_priority: 1
+      musehub_net:
+        gw_priority: 0
     depends_on:
       api:
         condition: service_healthy
