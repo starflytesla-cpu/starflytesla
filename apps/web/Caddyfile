@@ -60,22 +60,7 @@
 	respond /healthz "ok" 200
 }
 
-# 同機 muse-hub（獨立 compose，網路別名 muse-hub:8787）。
-# 網域由 MUSEHUB_ADDRESS 決定，不要寫死。變數未設定時改聽容器內的 :65535（純 HTTP、
-# 不發布到主機、不佔 80/443、不申請憑證），避免空位址被當成全域區塊而讓 Caddy 起不來。
-# 設成網域（不要加 http://，例如 muse-hub.packablesofa.com）後才自動申請 HTTPS。
-# 只轉 /mcp*、/sse、/messages*、/admin/*、/healthz，其餘 404。
-{$MUSEHUB_ADDRESS:http://127.0.0.1:65535} {
-	@musehub path /mcp* /sse /messages* /admin/* /healthz
-	handle @musehub {
-		# /sse 是 SSE、/mcp* 是 streamable HTTP，必須立刻送出，否則串流會被緩衝卡住。
-		# /messages*、/admin/*、/healthz 回應很短，不緩衝也不影響結果。
-		reverse_proxy muse-hub:8787 {
-			flush_interval -1
-		}
-	}
-
-	handle {
-		respond "Not Found" 404
-	}
-}
+# 同機的額外站台（例如 muse-hub）不放進映像。檔案在主機 /data/muse-hub/caddy/*.caddy，
+# 由 compose 唯讀掛到這個目錄。放在最外層，不會改到上面的站。
+# 目錄不存在、或裡面沒有任何 *.caddy，都只是沒有額外站台，現有網站照常啟動。
+import /etc/caddy/sites.d/*.caddy

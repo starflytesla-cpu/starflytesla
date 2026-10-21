@@ -79,9 +79,6 @@ services:
     restart: unless-stopped
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
-      # 空字串視為未設定，容器內改聽 :65535（不發布），不影響現有網站。
-      # 正式啟用時在 .env 設網域，例如 muse-hub.packablesofa.com。
-      MUSEHUB_ADDRESS: "${MUSEHUB_ADDRESS:-http://127.0.0.1:65535}"
     ports:
       - "80:80"
       - "443:443"
@@ -91,6 +88,20 @@ services:
       - caddy-config:/config
       # 素材檔案由 Caddy 直接提供（先經 /api/media/auth 檢查權限），唯讀
       - media:/media:ro
+      # muse-hub 站台與手動憑證放在主機上，不進映像。目錄已存在就直接掛上；
+      # 還沒建立時 compose 會建空目錄，Caddy 的 glob import 不會因此失敗。
+      - type: bind
+        source: /data/muse-hub/caddy
+        target: /etc/caddy/sites.d
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /data/muse-hub/certs
+        target: /etc/caddy/musehub-certs
+        read_only: true
+        bind:
+          create_host_path: true
     # 保留原本的 default 網路（才能連到 api）。另外只讓 web 加入同機 muse-hub 的外部網路。
     # musehub_net 會丟掉這個子網對外的新連線。容器同時接兩個網路時，Docker 可能把
     # musehub_net 設成預設閘道，web 就上不了網（含憑證續期）。gw_priority 較高者
