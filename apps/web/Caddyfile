@@ -59,3 +59,8 @@
 :8081 {
 	respond /healthz "ok" 200
 }
+
+# 同機的額外站台（例如 muse-hub）不放進映像。檔案在主機 /data/muse-hub/caddy/*.caddy，
+# 由 compose 唯讀掛到這個目錄。放在最外層，不會改到上面的站。
+# 目錄不存在、或裡面沒有任何 *.caddy，都只是沒有額外站台，現有網站照常啟動。
+import /etc/caddy/sites.d/*.caddy

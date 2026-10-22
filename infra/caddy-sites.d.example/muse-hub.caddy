@@ -1,0 +1,22 @@
+# 範例站台。複製到主機 /data/muse-hub/caddy/muse-hub.caddy（檔名須是 *.caddy）。
+# 憑證放 /data/muse-hub/certs/fullchain.pem 與 privkey.pem（容器內路徑見下面的 tls）。
+# 不放進映像；改這個檔或換憑證後重新載入 Caddy 即可，不用重建 web。
+# 使用手動憑證，不向 Let's Encrypt 申請。
+
+muse-hub.packablesofa.com {
+	tls /etc/caddy/musehub-certs/fullchain.pem /etc/caddy/musehub-certs/privkey.pem
+	encode gzip
+
+	# 只轉這些路徑，其餘 404。
+	@musehub path /mcp* /sse /messages* /admin/* /healthz
+	handle @musehub {
+		# /sse 是 SSE、/mcp* 是 streamable HTTP，必須立刻送出，否則串流會被緩衝卡住。
+		reverse_proxy muse-hub:8787 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}
